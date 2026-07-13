@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cellKey, creepHealth, creepSpeed, findPath, hexCenter, killCash, neighbors, pixelToHex, towerRange, upgradeCost } from '../src/core.js';
+import { cellKey, creepHealth, creepSpeed, findPath, hexCenter, killCash, neighbors, pixelToHex, towerRange, upgradeCost, scalePathPoint, pathBlockedHexes, PATH_SCALE, PATH_OFFSET_X, PATH_OFFSET_Y } from '../src/core.js';
 
 test('hex coordinate round-trip covers the full game board',()=>{for(let q=0;q<14;q++)for(let r=0;r<15;r++){const p=hexCenter(q,r);assert.deepEqual(pixelToHex(p.x,p.y),[q,r]);}});
 test('neighbors are reciprocal',()=>{for(let q=1;q<13;q++)for(let r=1;r<14;r++)for(const n of neighbors(q,r))assert(neighbors(...n).some(v=>cellKey(...v)===cellKey(q,r)));});
@@ -8,3 +8,6 @@ test('pathfinder routes around towers and rejects a sealed lane',()=>{const open
 
 test('WP7 Mango open-list sorting preserves native equal-depth route ties',()=>{const blocked=new Set(['0,0','0,4','1,2','2,2','3,2','3,3','3,4','4,0','5,1']);assert.deepEqual(findPath([0,2],[5,3],blocked,6,6),[[0,2],[1,3],[1,4],[2,4],[3,5],[4,4],[5,4],[5,3]]);});
 test('recovered native progression formulas retain integer truncation',()=>{assert.equal(upgradeCost(5,1),2);assert.equal(upgradeCost(5,3),7);assert.equal(creepHealth(70,1,1.7),52);assert.equal(creepHealth(70,2,1.7),105);assert.equal(creepHealth(40,4,2,.1),60);assert.equal(creepSpeed(40,3,1.25),60);assert.equal(killCash(5,.25),2);assert.equal(towerRange('BLASTER',7),225);assert.equal(towerRange('POP',3),130);});
+
+test('classic fixed-path coords map iOS 320x480 into the web play field',()=>{const o=scalePathPoint(0,0);assert.deepEqual(o,{x:PATH_OFFSET_X,y:PATH_OFFSET_Y});const p=scalePathPoint(100,200);assert.ok(Math.abs(p.x-(PATH_OFFSET_X+100*PATH_SCALE))<1e-9);assert.ok(Math.abs(p.y-(PATH_OFFSET_Y+200*PATH_SCALE))<1e-9);});
+test('path-blocked hexes cover the creep route corridor only',()=>{const path=[hexCenter(3,3),hexCenter(3,7)],blocked=pathBlockedHexes(path);for(const r of [3,4,5,6,7])assert.ok(blocked.has(cellKey(3,r)),`3,${r} on path`);assert.ok(!blocked.has('2,5'));assert.ok(!blocked.has('10,10'));});

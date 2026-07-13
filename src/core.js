@@ -17,6 +17,30 @@ export function killCash(wave,factor){return Math.trunc(1+(wave-1)*factor);}
 export function cellKey(q, r) { return `${q},${r}`; }
 export function parseCell(value) { return value.split(',').map(Number); }
 export function hexCenter(q, r) { return { x:8 + q * 36, y:26 + r * 44 + (q % 2 === 0 ? 22 : 0) }; }
+
+// The original geoDefense fixed-path levels are authored in the iPhone 320x480
+// portrait space. Map that logical area into the web engine's 480x800 play
+// field (below the score bar at y=32, above the build bar at y=646), preserving
+// aspect: uniform 1.279 scale centered horizontally. Spawn/exit points authored
+// off-screen (negative or >320/480) land outside the field, so creeps stream in.
+export const PATH_SCALE = 1.279, PATH_OFFSET_X = 35, PATH_OFFSET_Y = 32;
+export function scalePathPoint(x, y) { return { x: PATH_OFFSET_X + x * PATH_SCALE, y: PATH_OFFSET_Y + y * PATH_SCALE }; }
+function distanceToSegment(px, py, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, len = dx * dx + dy * dy;
+  if (!len) return Math.hypot(px - a.x, py - a.y);
+  const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len));
+  return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy));
+}
+// Hexes the creep route passes through cannot hold a tower (mirrors the
+// original's "can't build on the path" rule via checkCanPathEvenIfBlockedHex:).
+export function pathBlockedHexes(path, cols = 14, rows = 15, radius = 24) {
+  const blocked = new Set();
+  for (let q = 0; q < cols; q++) for (let r = 0; r < rows; r++) {
+    const c = hexCenter(q, r);
+    for (let i = 1; i < path.length; i++) if (distanceToSegment(c.x, c.y, path[i - 1], path[i]) <= radius) { blocked.add(cellKey(q, r)); break; }
+  }
+  return blocked;
+}
 export function pixelToHex(x, y, cols=14, rows=15) {
   let best=null, distance=Infinity;
   for(let q=0;q<cols;q++) for(let r=0;r<rows;r++) {
@@ -54,11 +78,15 @@ export function findPath(start, goal, blocked, cols=14, rows=15) {
   const path=[[...start]],seen=new Set([cellKey(...start)]);let current=[...start];while(cellKey(...current)!==cellKey(...goal)){const next=findNextCell(current,goal,blocked,cols,rows);if(!next||seen.has(cellKey(...next)))return null;path.push(next);seen.add(cellKey(...next));current=next;}return path;
 }
 
-export function parseLevel(xml, sourceName='', difficulty=null) {
+export function parseLevel(xml, sourceName='', difficulty=null, campaign='swarm') {
   const doc=new DOMParser().parseFromString(xml,'application/xml');
   if(doc.querySelector('parsererror')) throw new Error(`Invalid level XML: ${sourceName}`);
   const attr=(el,name,fallback='')=>el?.getAttribute(name)??fallback;
   const info=doc.querySelector('info');
+  const pathEl=doc.querySelector('creepPath');
+  const path=pathEl?[...pathEl.querySelectorAll('point')].map(p=>scalePathPoint(Number(attr(p,'x','0')),Number(attr(p,'y','0')))):null;
+  const pathMode=!!(path&&path.length>1);
+  const pathBlocked=pathMode?pathBlockedHexes(path):null;
   const spawns=[...doc.querySelectorAll('spawnhex')].map(el=>({name:attr(el,'name'),cell:parseCell(attr(el,'hex')),exitName:attr(el,'exit')}));
   const exits=new Map([...doc.querySelectorAll('exithex')].map(el=>[attr(el,'name'),parseCell(attr(el,'hex'))]));
   const creepRoot=doc.querySelector('creeps'), waveRoot=doc.querySelector('creepWaves');
@@ -66,12 +94,13 @@ export function parseLevel(xml, sourceName='', difficulty=null) {
   const waves=[...doc.querySelectorAll('creepWaves > wave')].map(el=>({spawnName:attr(el,'spawnHex',spawns[0]?.name),concurrent:attr(el,'concurrent','false').toLowerCase()==='true',groups:[...el.querySelectorAll('spawn')].map(s=>({type:attr(s,'type'),count:Number(attr(s,'count','1'))}))}));
   const overrides=new Set([...specials.map(s=>s.hex),...spawns.map(s=>cellKey(...s.cell)),...exits.values()].map(v=>Array.isArray(v)?cellKey(...v):v)),boundary=[];for(let q=0;q<14;q++)for(let r=0;r<15;r++)if((q===0||q===13||r===0||r===14)&&!overrides.has(cellKey(q,r)))boundary.push(cellKey(q,r));
   return {
-    sourceName,
+    sourceName, campaign,
     difficulty: difficulty ?? (/_E_/.test(sourceName)?'Easy':/_M_/.test(sourceName)?'Medium':'Hard'),
     name:attr(info,'name','Untitled swarm'), id:Number(attr(info,'id','0')),
     cash:Number(attr(info,'initCash','0')), lives:Number(attr(info,'initLives','10')),
     description:attr(info,'description').replaceAll('\r',' '),
-    blocked:new Set([...boundary,...specials.filter(s=>s.type==='blocked').map(s=>s.hex)]),
+    pathMode, path, exitPoint:pathMode?path[path.length-1]:null,
+    blocked:pathMode?pathBlocked:new Set([...boundary,...specials.filter(s=>s.type==='blocked').map(s=>s.hex)]),
     pass:new Set(specials.filter(s=>s.type.endsWith('pass')).map(s=>s.hex)),
     fast:new Set(specials.filter(s=>s.type==='fastpass').map(s=>s.hex)),
     heal:new Set(specials.filter(s=>s.type==='healpass').map(s=>s.hex)),

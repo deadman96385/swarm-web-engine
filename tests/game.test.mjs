@@ -244,3 +244,30 @@ test('pause intercepts board input and victory keeps native fireworks animating'
 test('native multiplier bonuses drift as five-second color-cycling labels',()=>{
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{});game.reward({x:80,y:70,wave:1,exit:[2,0]});const bonus=game.effects.find(e=>e.kind==='bonus');assert.equal(bonus.text,'×20');assert.equal(bonus.life,5);assert.equal(bonus.maxLife,5);assert.ok(Math.hypot(bonus.x2-bonus.x,bonus.y2-bonus.y)>=64);game.destroy();
 });
+
+function pathLevel(){return {
+  pathMode:true,path:[{x:0,y:100},{x:200,y:100},{x:200,y:300}],exitPoint:{x:200,y:300},
+  cash:50,lives:3,blocked:new Set(['5,5']),pass:new Set(),fast:new Set(),heal:new Set(),placed:[],endless:false,spawns:[],exits:new Map(),
+  towers:[{type:'BLASTER',cost:5},{type:'POP',cost:20}],
+  creeps:{CHOMPER:{speed:100,health:10}},waveHealthFactor:1,waveHealthFactor2:0,waveSpeedFactor:1,waveWealthFactor:1,delayBetweenSpawns:.01,delayBetweenWaves:20,
+  waves:[{spawnName:undefined,groups:[{type:'CHOMPER',count:1}]}]
+};}
+
+test('classic path creep spawns at the route start, advances along it, and breaches at the exit',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;
+  const game=new Game(canvasStub(),pathLevel(),{});game.nextWaveTimer=0;game.update(.1);
+  assert.equal(game.creeps.length,1);assert.equal(game.creeps[0].placed,false);
+  assert.deepEqual({x:game.creeps[0].x,y:game.creeps[0].y},{x:0,y:100});
+  game.update(.1);assert.equal(game.creeps[0].placed,true);assert.ok(game.creeps[0].distanceTraveled>0);assert.ok(game.creeps[0].x>0);
+  for(let i=0;i<400&&game.creeps.length;i++)game.update(.1);
+  assert.equal(game.creeps.length,0);assert.ok(game.lives<3);game.destroy();
+});
+
+test('classic build rules offer Vortex and forbid building on the creep path',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;
+  const game=new Game(canvasStub(),pathLevel(),{});
+  assert.ok(game.nativeBuildTypes().some(t=>t.type==='POP'));
+  assert.equal(game.canPlace('POP',[8,8]).ok,true);
+  assert.equal(game.canPlace('BLASTER',[5,5]).ok,false);
+  game.destroy();
+});

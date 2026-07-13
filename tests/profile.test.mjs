@@ -6,3 +6,14 @@ const level=(n,difficulty='Easy')=>({sourceName:`level-${difficulty}-${n}`,name:
 const result=(score,lives=10,extra={})=>({won:true,score,lives,gotX50:false,placedTypes:[],fullyUpgraded:[],...extra});
 test('local profile preserves native high-score and perfect-run semantics',()=>{const storage=new MemoryStorage(),profile=new ProfileStore(storage),mission=level(1);profile.record(mission,result(100,10));assert.equal(profile.highScore(mission).livesLost,0);profile.record(mission,result(200,5));assert.equal(profile.highScore(mission).score,200);assert.equal(profile.highScore(mission).livesLost,0);profile.record(mission,result(50,10));assert.equal(profile.highScore(mission).score,200);assert.ok(profile.data.achievements.includes('E1'));assert.equal(new ProfileStore(storage).highScore(mission).score,200);});
 test('achievement qualification matches difficulty, tower, close-call, and toolbox rules',()=>{const profile=new ProfileStore(new MemoryStorage());for(let i=1;i<=9;i++)profile.record(level(i),result(i*100,10));profile.record(level(10),result(1000,10,{gotX50:true,fullyUpgraded:['BLASTER','LASER','MISSILE','SHOCK','POP'],placedTypes:['BLASTER','LASER','MISSILE','SHOCK','THUMP']}));const earned=new Set(profile.data.achievements);for(const code of ['E1','E2','E3','CC','LB','LL','LM','LS','LV','TH'])assert.ok(earned.has(code),code);});
+test('classic campaign scores stay out of the Swarm difficulty achievements',()=>{
+  const profile=new ProfileStore(new MemoryStorage());
+  for(let i=1;i<=9;i++)profile.record({sourceName:`classic-E-${i}`,name:`C${i}`,difficulty:'Easy',campaign:'classic',lives:10,endless:false},result(i*100,10));
+  const earned=new Set(profile.data.achievements);
+  assert.ok(!earned.has('E1'));assert.ok(!earned.has('E2'));assert.ok(!earned.has('E3'));
+  profile.record({sourceName:'classic-H-1',name:'CH',difficulty:'Hard',campaign:'classic',lives:10,endless:false},result(500,10,{gotX50:true,fullyUpgraded:['POP'],placedTypes:['BLASTER','LASER','MISSILE','SHOCK','POP']}));
+  const earned2=new Set(profile.data.achievements);
+  assert.ok(earned2.has('CC'));assert.ok(earned2.has('LV'));assert.ok(earned2.has('TH'));
+  profile.record({sourceName:'swarm-E-1',name:'S1',difficulty:'Easy',campaign:'swarm',lives:10,endless:false},result(100,10));
+  assert.ok(new Set(profile.data.achievements).has('E1'));
+});

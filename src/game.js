@@ -4,6 +4,9 @@ import { DynamicBackdrop } from './dynamic-backdrop.js';
 const CREEP_SPRITES={CHOMPER:[0,0],CUBIC:[64,0],SPINNER:[0,64],PULSAR:[64,64],STAR:[0,128],WIGGLE:[0,192],SWARM:[64,192]};
 const TOWER_ROWS={BLASTER:64,LASER:128,MISSILE:192,SHOCK:256,POP:320,THUMP:384};
 const BOOST_CAPACITY={BLASTER:l=>75+l*50,LASER:l=>25+l*25,MISSILE:l=>100*l};
+// Per-frame movement multiplier for fixed-path (classic geoDefense) creeps.
+// Matches the maze engine's feel constant; the authored path is pre-scaled in core.js.
+const PATH_MOVE_SCALE=1.5;
 
 function pointSegmentDistance(p,a,b){
   const dx=b.x-a.x,dy=b.y-a.y,length=dx*dx+dy*dy;
@@ -19,7 +22,7 @@ function inPlayfield(point){return point.x>=0&&point.x<480&&point.y>=32&&point.y
 
 export class Game {
   constructor(canvas,level,assets,callbacks={},savedState=null,options={}){
-    this.canvas=canvas;this.ctx=canvas.getContext('2d');this.level=level;this.assets=assets;this.callbacks=callbacks;
+    this.canvas=canvas;this.ctx=canvas.getContext('2d');this.level=level;this.assets=assets;this.callbacks=callbacks;this.pathMode=!!level.pathMode;
     this.hardcore=savedState?.hardcore??options.hardcore??false;this.healthBars=savedState?.healthBars??options.healthBars??true;this.placeAboveFinger=savedState?.placeAboveFinger??options.placeAboveFinger??false;this.cash=Math.floor(level.cash*(this.hardcore?1:1.25));this.lives=level.lives;this.score=0;this.multiplier=1;this.waveIndex=0;this.apparentWave=0;this.placedTypes=new Set(savedState?.placedTypes??[]);this.fullyUpgraded=new Set(savedState?.fullyUpgraded??[]);this.gotX50=!!savedState?.gotX50;
     this.towers=new Map();this.creeps=[];this.projectiles=[];this.particles=[];this.effects=[];this.sequences=[];this.backdrop=new DynamicBackdrop();this.nextWaveTimer=level.delayBetweenWaves;this.awaitingEndlessReset=false;
     this.selectedType=null;this.selectedTower=null;this.linkingTower=null;this.lastTowerTap=0;this.buildPreview=null;this.lastBuildPointer=null;this.hexBrightness=.25;this.hexBrightnessVelocity=0;this.hexBrightnessImpulse=0;this.nativeBuildDrag=null;this.nativePointerDown=false;this.nativeLinkTarget=null;this.nativeLinkPosition=null;this.oscillatorStarts={};
@@ -45,7 +48,9 @@ export class Game {
     this.repath();this.sound('menu');this.emit();if(!free)this.persist();return true;
   }
 
-  canPlace(type,cell){const key=cellKey(...cell),def=this.level.towers.find(t=>t.type===type);if(!def||type==='POP')return {ok:false,reason:'That tower cannot be built in Swarm.'};if(this.towers.has(key)||this.level.blocked.has(key)||this.level.pass.has(key)||this.level.spawns.some(s=>cellKey(...s.cell)===key)||[...this.level.exits.values()].some(e=>cellKey(...e)===key))return {ok:false,reason:'That hex is unavailable.'};if(this.cash<def.cost)return {ok:false,reason:'Not enough credits.'};if(!this.allRoutes(this.blocked(cell)))return {ok:false,reason:'That tower would seal an entrance.'};return {ok:true,reason:''};}
+  canPlace(type,cell){const key=cellKey(...cell),def=this.level.towers.find(t=>t.type===type);
+    if(this.pathMode){if(!def)return {ok:false,reason:'That tower is not available in this mission.'};if(this.towers.has(key))return {ok:false,reason:'A tower already occupies that hex.'};if(this.level.blocked.has(key))return {ok:false,reason:"You can't build on the creep path."};if(this.cash<def.cost)return {ok:false,reason:'Not enough credits.'};return {ok:true,reason:''};}
+    if(!def||type==='POP')return {ok:false,reason:'That tower cannot be built in Swarm.'};if(this.towers.has(key)||this.level.blocked.has(key)||this.level.pass.has(key)||this.level.spawns.some(s=>cellKey(...s.cell)===key)||[...this.level.exits.values()].some(e=>cellKey(...e)===key))return {ok:false,reason:'That hex is unavailable.'};if(this.cash<def.cost)return {ok:false,reason:'Not enough credits.'};if(!this.allRoutes(this.blocked(cell)))return {ok:false,reason:'That tower would seal an entrance.'};return {ok:true,reason:''};}
   setBuildPreview(type,clientX,clientY){const rect=this.canvas.getBoundingClientRect(),rawX=(clientX-rect.left)*480/rect.width,rawY=(clientY-rect.top)*800/rect.height,x=rawX,y=rawY-(this.placeAboveFinger?96:0);if(this.lastBuildPointer)this.hexBrightnessImpulse=Math.hypot(rawX-this.lastBuildPointer.x,rawY-this.lastBuildPointer.y)*.75;this.lastBuildPointer={x:rawX,y:rawY};if(x<0||y<0||x>480||y>800){this.buildPreview=null;return;}const cell=pixelToHex(x,y);this.buildPreview=cell?{type,cell,...this.canPlace(type,cell)}:null;}
   commitBuildPreview(){const preview=this.buildPreview;this.buildPreview=null;this.lastBuildPointer=null;if(preview?.ok)return this.addTower(preview.type,preview.cell);return false;}
   cancelBuildPreview(){this.buildPreview=null;this.lastBuildPointer=null;}
@@ -53,7 +58,7 @@ export class Game {
   selectType(type){this.selectedType=type;this.selectedTower=null;this.linkingTower=null;this.callbacks.selection?.(null);}
 
   pointerPosition(event){const rect=this.canvas.getBoundingClientRect();return {x:(event.clientX-rect.left)*480/rect.width,y:(event.clientY-rect.top)*800/rect.height};}
-  nativeBuildTypes(){return this.level.towers.filter(t=>t.type!=='POP');}
+  nativeBuildTypes(){return this.pathMode?this.level.towers.slice():this.level.towers.filter(t=>t.type!=='POP');}
   handleNativeBar(px,py,event){
     if(py<646)return false;
     if(this.selectedTower){
@@ -142,11 +147,13 @@ export class Game {
   spawnOne(sequence){
     const item=sequence.items.shift();if(!item)return;
     const def=this.level.creeps[item.type]??{speed:30,health:50},w=sequence.wave,health=creepHealth(def.health,w,this.level.waveHealthFactor??1.25,this.level.waveHealthFactor2??0,this.hardcore),speed=creepSpeed(def.speed,w,this.level.waveSpeedFactor??1);
+    if(this.pathMode){if(item.type==='WIGGLE'||item.type==='PULSAR')this.oscillatorStarts[item.type]??=this.sceneTime;this.creeps.push({type:item.type,pathCells:[],path:this.level.path,pathIndex:0,distanceTraveled:0,x:this.level.path[0].x,y:this.level.path[0].y,speed,currentSpeed:speed,health,maxHealth:health,wave:w,exit:null,placed:false,dead:false,rotation:0,visualScale:.375,rotationSpeed:0});sequence.timer=this.level.delayBetweenSpawns;return;}
     const swarm=item.type==='SWARM';if(item.type==='WIGGLE'||item.type==='PULSAR')this.oscillatorStarts[item.type]??=this.sceneTime;this.creeps.push({type:item.type,pathCells:[],path:[],pathIndex:0,distanceTraveled:0,x:0,y:0,speed,currentSpeed:speed,health,maxHealth:health,wave:w,spawnCell:[...item.spawn.cell],exit:[...item.spawn.exit],placed:false,dead:false,rotation:0,visualScale:swarm?.375+Math.random()*.375:.375,rotationSpeed:swarm?Math.random()*14042*Math.PI/180:0});
     sequence.timer=this.level.delayBetweenSpawns*(item.type==='SWARM'?.5:1);
   }
 
   repath(){
+    if(this.pathMode)return;
     for(const c of this.creeps){if(c.placed===false)continue;const current=pixelToHex(c.x,c.y),next=current?findNextCell(current,c.exit,this.blocked()):null;if(next){c.pathCells=[current,next];c.path=c.pathCells.map(v=>hexCenter(...v));c.pathIndex=1;}}
   }
 
@@ -154,6 +161,7 @@ export class Game {
     this.sceneTime+=dt;if(this.paused)return;this.backdrop.update(dt);this.visualTime+=dt;this.hexBrightnessVelocity+=this.hexBrightnessImpulse*dt*.25;this.hexBrightnessImpulse=0;this.hexBrightness+=this.hexBrightnessVelocity*dt;if(this.hexBrightness<.25){this.hexBrightness=.25;this.hexBrightnessVelocity=0;}if(this.hexBrightness>1){this.hexBrightness=1;this.hexBrightnessVelocity=0;}this.hexBrightnessVelocity-=dt*3;if(this.ended){this.updateGameOverEffects(dt);return;}
     for(const c of this.creeps){
       if(c.dead)continue;
+      if(this.pathMode){this.updatePathCreep(c,dt);continue;}
       if(c.placed===false){c.placed=true;const start=c.spawnCell??this.level.spawns[0].cell,next=findNextCell(start,c.exit,this.blocked()),point=hexCenter(...start);c.x=point.x;c.y=point.y;if(!next){this.breach(c);continue;}c.pathCells=[[...start],next];c.path=c.pathCells.map(cell=>hexCenter(...cell));c.pathIndex=1;}
       c.currentSpeed=Math.max(c.speed*.1,c.currentSpeed);
       const terrain=cellKey(...(c.pathCells[Math.max(0,c.pathIndex-1)]??c.pathCells[0]));
@@ -174,6 +182,18 @@ export class Game {
     if(this.lives<=0){this.finish(this.level.endless&&this.score!==0);this.emit();return;}
     if(!this.level.endless&&this.waveIndex>=this.level.waves.length&&!this.sequences.length&&!this.creeps.length)this.finish(true);
     this.emit();
+  }
+
+  updatePathCreep(c,dt){
+    if(c.placed===false){c.placed=true;c.path=this.level.path;c.pathIndex=1;c.x=c.path[0].x;c.y=c.path[0].y;}
+    c.currentSpeed=Math.max(c.speed*.1,c.currentSpeed);
+    const target=c.path[c.pathIndex];if(!target){this.breach(c);return;}
+    const dx=target.x-c.x,dy=target.y-c.y;
+    if(['CHOMPER','WIGGLE','PULSAR'].includes(c.type))c.rotation=Math.atan2(dy,dx);else if(['SPINNER','STAR','CUBIC'].includes(c.type))c.rotation-=Math.PI*2*dt;
+    if(c.type==='WIGGLE'||c.type==='PULSAR'){this.oscillatorStarts[c.type]??=this.sceneTime;const phase=((this.sceneTime-this.oscillatorStarts[c.type])%.2)/.1,osc=phase<=1?.875+.25*phase:1.125-.25*(phase-1);c.visualScale=.375*osc;}
+    let remaining=c.currentSpeed*PATH_MOVE_SCALE*dt;
+    while(remaining>0&&!c.dead){const next=c.path[c.pathIndex];if(!next){this.breach(c);break;}const mx=next.x-c.x,my=next.y-c.y,d=Math.hypot(mx,my);if(d<=remaining){c.x=next.x;c.y=next.y;c.distanceTraveled=(c.distanceTraveled??0)+d;remaining-=d;c.pathIndex++;if(c.pathIndex>=c.path.length){this.breach(c);break;}}else{c.x+=mx/d*remaining;c.y+=my/d*remaining;c.distanceTraveled=(c.distanceTraveled??0)+remaining;remaining=0;}}
+    c.currentSpeed=Math.min(c.speed,c.currentSpeed+8*dt);if(c.shakeTimer>0)c.shakeTimer-=dt;
   }
 
   updateSpawns(dt){
@@ -276,8 +296,8 @@ export class Game {
 
   snapshot(){
     const towers=[...this.towers.values()].map(t=>{const {link,target,...plain}=t;return {...plain,cell:[...t.cell],linkKey:link?cellKey(...link.cell):null,targetIndex:target?this.creeps.indexOf(target):-1};});
-    const creeps=this.creeps.filter(c=>!c.dead).map(c=>({...c,pathCells:c.pathCells.map(v=>[...v]),path:c.path.map(v=>({...v})),exit:[...c.exit]}));
-    const sequences=this.sequences.map(s=>({timer:s.timer,wave:s.wave,items:s.items.map(i=>({type:i.type,spawnName:i.spawn.name}))}));
+    const creeps=this.creeps.filter(c=>!c.dead).map(c=>({...c,pathCells:(c.pathCells??[]).map(v=>[...v]),path:c.path.map(v=>({...v})),exit:c.exit?[...c.exit]:null}));
+    const sequences=this.sequences.map(s=>({timer:s.timer,wave:s.wave,items:s.items.map(i=>({type:i.type,spawnName:i.spawn?.name??null}))}));
     const projectiles=this.projectiles.map(p=>({...p,targetIndex:p.target?this.creeps.indexOf(p.target):-1,sourceKey:p.source?cellKey(...p.source.cell):null,partnerKey:p.partner?cellKey(...p.partner.cell):null,target:undefined,source:undefined,partner:undefined}));
     return {version:1,hardcore:this.hardcore,healthBars:this.healthBars,placeAboveFinger:this.placeAboveFinger,placedTypes:[...this.placedTypes],fullyUpgraded:[...this.fullyUpgraded],gotX50:this.gotX50,cash:this.cash,lives:this.lives,score:this.score,multiplier:this.multiplier,waveIndex:this.waveIndex,apparentWave:this.apparentWave,nextWaveTimer:this.nextWaveTimer,awaitingEndlessReset:this.awaitingEndlessReset,towers,creeps,sequences,projectiles};
   }
@@ -287,7 +307,7 @@ export class Game {
     this.cash=state.cash;this.lives=state.lives;this.score=state.score;this.multiplier=state.multiplier;this.waveIndex=state.waveIndex;this.apparentWave=state.apparentWave??state.waveIndex;this.nextWaveTimer=state.nextWaveTimer;this.awaitingEndlessReset=!!state.awaitingEndlessReset;
     this.towers.clear();for(const saved of state.towers){const {linkKey,targetIndex,...tower}=saved;this.towers.set(cellKey(...tower.cell),{...tower,cell:[...tower.cell],link:null,target:null,_linkKey:linkKey,_targetIndex:targetIndex??-1});}
     for(const t of this.towers.values()){t.link=t._linkKey?this.towers.get(t._linkKey)??null:null;delete t._linkKey;}
-    this.creeps=state.creeps.map(c=>({...c,pathCells:c.pathCells.map(v=>[...v]),path:c.path.map(v=>({...v})),exit:[...c.exit],dead:false}));
+    this.creeps=state.creeps.map(c=>({...c,pathCells:(c.pathCells??[]).map(v=>[...v]),path:c.path.map(v=>({...v})),exit:c.exit?[...c.exit]:null,dead:false}));
     for(const t of this.towers.values()){t.target=t._targetIndex>=0?this.creeps[t._targetIndex]??null:null;delete t._targetIndex;}
     this.projectiles=(state.projectiles??[]).map(p=>{const {targetIndex,sourceKey,partnerKey,...plain}=p,restored={...plain,target:targetIndex>=0?this.creeps[targetIndex]??null:null,source:sourceKey?this.towers.get(sourceKey)??null:null,partner:partnerKey?this.towers.get(partnerKey)??null:null};if(restored.type==='POP_WAVE'&&!restored.rings)restored.rings=['#ff0000','#00ff00','#0000ff'].map((color,index)=>({color,offset:(index-1)*4,rotation:0}));return restored;});
     this.sequences=state.sequences.map(s=>({timer:s.timer,wave:s.wave,items:s.items.map(i=>({type:i.type,spawn:this.level.spawns.find(sp=>sp.name===i.spawnName)??this.level.spawns[0]}))}));
@@ -297,7 +317,7 @@ export class Game {
 
   reward(c){
     this.cash=Math.min(5000,this.cash+killCash(c.wave,this.level.waveWealthFactor));
-    const exit=hexCenter(...c.exit),ratio=Math.min(1,Math.hypot(c.x-exit.x,c.y-exit.y)/480);let bonus=1;if(ratio<.02)bonus=50;else if(ratio<.05)bonus=20;else if(ratio<.1)bonus=10;else if(ratio<.2)bonus=5;
+    const exit=this.pathMode?this.level.exitPoint:hexCenter(...c.exit),ratio=Math.min(1,Math.hypot(c.x-exit.x,c.y-exit.y)/480);let bonus=1;if(ratio<.02)bonus=50;else if(ratio<.05)bonus=20;else if(ratio<.1)bonus=10;else if(ratio<.2)bonus=5;
     if(bonus===50)this.gotX50=true;this.multiplier+=bonus;this.score+=c.wave*5*this.multiplier;const angle=Math.random()*Math.PI*2,distance=64+Math.random()*64,size=bonus<5?10:bonus<10?12:bonus<20?15:bonus<50?20:24;this.effects.push({kind:'bonus',x:c.x,y:c.y,x2:c.x+Math.cos(angle)*distance,y2:c.y+Math.sin(angle)*distance,text:`×${bonus}`,size,colorOffset:Math.random(),life:5,maxLife:5});
     this.boomAt(c.x,c.y,128,200,2,null);
     this.boomAt(c.x,c.y,128,100,1,'#91b9ff');
@@ -313,8 +333,10 @@ export class Game {
   draw(){
     const g=this.ctx;g.clearRect(0,0,480,800);g.fillStyle='#01030a';g.fillRect(0,0,480,800);
     this.drawBackdrop();if(this.assets.honeycomb){g.globalAlpha=this.hexBrightness;g.drawImage(this.assets.honeycomb,0,0);g.globalAlpha=1;}
+    if(this.pathMode)this.drawPath();else{
     for(const key of this.level.blocked){const [q,r]=key.split(',').map(Number);this.hexFill(q,r,'rgba(255,70,40,.25)','#ff412d');}for(const key of this.level.pass){const [q,r]=key.split(',').map(Number);this.hexFill(q,r,'rgba(255,145,20,.22)','#ff9a24');}for(const key of this.level.fast??[]){const [q,r]=key.split(',').map(Number);this.hexFill(q,r,'rgba(0,190,255,.28)','#28dfff');}for(const key of this.level.heal??[]){const [q,r]=key.split(',').map(Number);this.hexFill(q,r,'rgba(70,255,110,.28)','#6dff7f');}
     for(const s of this.level.spawns)this.hexFill(...s.cell,'rgba(0,170,255,.28)','#21d7ff');for(const e of this.level.exits.values())this.hexFill(...e,'rgba(117,255,48,.24)','#8cff42');
+    }
     if(this.nativeLinkPosition&&this.selectedTower){const a=hexCenter(...this.selectedTower.cell),b=this.nativeLinkTarget?hexCenter(...this.nativeLinkTarget.cell):this.nativeLinkPosition;g.strokeStyle=this.nativeLinkTarget?'#f3a4ff':'rgba(218,83,255,.55)';g.lineWidth=this.nativeLinkTarget?5:3;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();}
     if(this.buildPreview){const p=hexCenter(...this.buildPreview.cell),range=towerRange(this.buildPreview.type,1);this.hexFill(...this.buildPreview.cell,this.buildPreview.ok?'rgba(80,255,120,.25)':'rgba(255,60,60,.3)',this.buildPreview.ok?'#7dff8b':'#ff4b5f');g.save();g.globalCompositeOperation='lighter';g.globalAlpha=.5;if(this.assets.touchIndicators){const sx=this.buildPreview.ok?256:0;g.drawImage(this.assets.touchIndicators,sx,0,256,256,p.x-range,p.y-range,range*2,range*2);}else{g.strokeStyle=this.buildPreview.ok?'#73ff8b':'#ff4b5f';g.lineWidth=3;g.beginPath();g.arc(p.x,p.y,range,0,Math.PI*2);g.stroke();}g.restore();}
     g.save();g.globalCompositeOperation='lighter';for(const p of this.particles){g.globalAlpha=Math.min(1,p.life/(p.maxLife||p.life)*1.5);g.fillStyle=p.color;const size=p.size??2;g.fillRect(p.x-size/2,p.y-size/2,size,size);}g.restore();
@@ -355,6 +377,7 @@ export class Game {
   }
 
   hexFill(q,r,fill,stroke){const {x,y}=hexCenter(q,r),radius=24;this.ctx.beginPath();for(let i=0;i<6;i++){const a=Math.PI/3*i,xp=x+Math.cos(a)*radius,yp=y+Math.sin(a)*radius;i?this.ctx.lineTo(xp,yp):this.ctx.moveTo(xp,yp);}this.ctx.closePath();this.ctx.fillStyle=fill;this.ctx.fill();this.ctx.strokeStyle=stroke;this.ctx.lineWidth=2;this.ctx.stroke();}
+  drawPath(){const path=this.level.path;if(!path||path.length<2)return;const g=this.ctx,trace=()=>{g.beginPath();g.moveTo(path[0].x,path[0].y);for(let i=1;i<path.length;i++)g.lineTo(path[i].x,path[i].y);};g.save();g.lineJoin='round';g.lineCap='round';g.strokeStyle='rgba(40,110,190,.20)';g.lineWidth=34;trace();g.stroke();g.globalCompositeOperation='lighter';g.strokeStyle='rgba(90,200,255,.35)';g.lineWidth=3;trace();g.stroke();const start=path[0],end=path[path.length-1];g.fillStyle='rgba(60,255,140,.8)';g.beginPath();g.arc(start.x,start.y,7,0,Math.PI*2);g.fill();g.fillStyle='rgba(255,80,120,.85)';g.beginPath();g.arc(end.x,end.y,7,0,Math.PI*2);g.fill();g.restore();}
   drawTower(t){const g=this.ctx,p=hexCenter(...t.cell),sy=TOWER_ROWS[t.type]??64,size=t.type==='POP'&&t.level===7?48*(t.visualScale??1):48;if(this.assets.towers){g.save();g.globalCompositeOperation='lighter';g.translate(p.x,p.y);if(t.type==='POP'||t.type==='THUMP')g.rotate(t.rotation);g.drawImage(this.assets.towers,0,sy,64,64,-size/2,-size/2,size,size);if(t.type!=='POP'){g.save();if(['BLASTER','LASER','MISSILE'].includes(t.type))g.rotate(t.heading+Math.PI/2);else if(t.type==='SHOCK')g.rotate(t.rotation);else if(t.type==='THUMP')g.rotate(Math.PI/4);g.drawImage(this.assets.towers,Math.min(7,t.level)*64,sy,64,64,-24,-24,48,48);g.restore();}if(t.type==='LASER'&&t.lockedHeading){g.save();g.rotate(Math.PI/4);g.drawImage(this.assets.towers,448,0,64,64,-48,-48,96,96);g.restore();}g.restore();}else{g.fillStyle=TOWER_STATS[t.type]?.color??'#fff';g.beginPath();g.arc(p.x,p.y,13,0,Math.PI*2);g.fill();}if(t.type==='POP'&&t.energy>0){g.strokeStyle='#f55cff';g.lineWidth=3;g.beginPath();g.arc(p.x,p.y,21,-Math.PI/2,-Math.PI/2+Math.PI*2*t.energy/(250*t.level));g.stroke();}if(t.upgradeRemaining>0){const progress=1-t.upgradeRemaining/t.upgradeDuration;g.save();g.globalCompositeOperation='lighter';g.lineWidth=6;g.strokeStyle='#000080';g.beginPath();g.moveTo(p.x-30,p.y);g.lineTo(p.x+30,p.y);g.stroke();g.strokeStyle='#004080';g.beginPath();g.moveTo(p.x-30,p.y);g.lineTo(p.x-30+60*progress,p.y);g.stroke();g.restore();}this.drawTowerLink(t,p);}
   drawTowerLink(t,p){if(!t.link)return;const g=this.ctx,b=hexCenter(...t.link.cell),elapsed=this.sceneTime-(this.oscillatorStarts.LINK??this.sceneTime),phase=(elapsed%.5)/.25,pulse=phase<=1?.25+.5*phase:.75-.5*(phase-1),brightness=t.boosting?pulse:.25,base=t.type==='BLASTER'?[0,1,0]:t.type==='LASER'?[0,.25,1]:t.type==='MISSILE'?[1,0,0]:[1,0,1],channel=value=>Math.round(Math.min(1,value*brightness)*255);g.save();g.globalCompositeOperation='lighter';g.strokeStyle=`rgb(${channel(base[0])} ${channel(base[1])} ${channel(base[2])})`;g.lineWidth=3;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(b.x,b.y);g.stroke();g.restore();}
   drawSelectionOverlay(){const t=this.selectedTower;if(!t)return;const g=this.ctx,p=hexCenter(...t.cell),range=towerRange(t.type,t.level);g.save();g.globalCompositeOperation='lighter';if(this.assets.touchIndicators){g.globalAlpha=.25;g.drawImage(this.assets.touchIndicators,256,0,256,256,p.x-range,p.y-range,range*2,range*2);}if(this.assets.towers){g.globalAlpha=1;g.translate(p.x,p.y);g.rotate(this.visualTime*Math.PI/2);g.drawImage(this.assets.towers,0,0,64,64,-40,-40,80,80);}g.restore();}
