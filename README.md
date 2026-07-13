@@ -10,7 +10,7 @@ Open the hosted engine and load your own game files — nothing is downloaded fr
 
 1. Open the link above.
 2. Choose your legally obtained Windows Phone `.xap`.
-3. Optionally add your iOS `.ipa` in the same picker for the original WAV audio and the five Level Pack 1 bonus missions.
+3. Optionally add your iOS `.ipa` in the same picker for the original WAV audio, the five Level Pack 1 bonus missions, and the 34-mission **Original geoDefense** campaign (the fixed creep-path levels from the predecessor game, bundled inside the iOS app).
 
 Because the site ships no game data, you must supply the archive yourself. It is read locally in your browser and never leaves the tab.
 
@@ -29,7 +29,7 @@ Requires [Node.js](https://nodejs.org/) (18 or newer). No `npm install` is neede
 
 Set a different port with `PORT`, e.g. `PORT=4174 npm start`.
 
-Then choose your legally obtained Windows Phone `.xap` (and optionally the iOS `.ipa` for original audio and the Level Pack 1 bonus missions). The archives are read entirely in the browser — never uploaded, copied into the build, or retained after the tab closes. The dev server also enforces an allowlist: it serves only the engine's HTML/CSS/JS and returns 404 for anything else.
+Then choose your legally obtained Windows Phone `.xap` (and optionally the iOS `.ipa` for original audio, the Level Pack 1 bonus missions, and the original *geoDefense* campaign). The archives are read entirely in the browser — never uploaded, copied into the build, or retained after the tab closes. The dev server also enforces an allowlist: it serves only the engine's HTML/CSS/JS and returns 404 for anything else.
 
 ## Deploy
 
@@ -41,11 +41,12 @@ Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs `node scri
 
 ## What's implemented
 
-The engine reproduces the full **game** — every screen, tower, creep, mode, and mechanic the WP build ships, plus the five iOS Level Pack 1 bonus missions. The only things left out are platform/online *services* that can't (or shouldn't) run in a browser. Details and the recovered native formulas are in [docs/FIDELITY.md](docs/FIDELITY.md).
+The engine reproduces the full **game** — every screen, tower, creep, mode, and mechanic the WP build ships, plus the five iOS Level Pack 1 bonus missions and the 34-mission original *geoDefense* campaign that ships (unused) inside the iOS app. The only things left out are platform/online *services* that can't (or shouldn't) run in a browser. Details and the recovered native formulas are in [docs/FIDELITY.md](docs/FIDELITY.md).
 
 ### Content
 - **30 missions** — the 10 Easy, 10 Medium, and 10 Hard designs from the WP archive, with original maps, tutorials, entrances/exits, blocked/fast-pass/heal-pass/pass-through cells, pre-placed towers, per-mission economy and lives, creep rosters, wave banks, and tower availability.
 - **iOS Level Pack 1** — when the `.ipa` is supplied, the five iOS-exclusive bonus missions (*Lesser Evil*, *Jellyfish*, *Stripes*, *Chromasome*, *The Groove*) load from it and appear under a dedicated **Level Pack 1** menu section. They are scored on the local leaderboard but kept out of the base Easy/Medium/Hard achievement counts.
+- **Original geoDefense campaign** — the `.ipa` also carries 34 complete levels (9 Easy, 12 Medium, 13 Hard) from the original *geoDefense* that the shipping Swarm app never loads. Supply the `.ipa` and they appear under an **Original geoDefense** menu section with their own Easy/Medium/Hard tabs. Unlike the Swarm maze, these use fixed creep paths (`<creepPath>` polylines): creeps stream along a drawn route and you build on the surrounding hexes — you can't build on the path, and Vortex is buildable. Scores go to the local leaderboard but, like Level Pack 1, are kept out of the Swarm achievement counts.
 - **Endless missions** — authored wave banks cycle and the native score-on-survival ending is preserved.
 - **Original presentation loaded at runtime** — main menu, level-select, and pre-game artwork; tutorial art paired with the archive's localized text, positions, wrapping, and scale; English plus packaged **German, Spanish, French, and Italian** managed-resource strings decoded straight from the `.xap`.
 
@@ -65,7 +66,7 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 - Native distance-to-exit **score multiplier** bonuses (×5/×10/×20/×50 close-call thresholds).
 
 ### Screens and flow
-- **Loader** (archive picker) → **main menu** (Easy/Medium/Hard, optional Level Pack 1, Leaderboards, Achievements, Options, Continue) → **level select** → **pre-game** (leaderboard + high score) → **tutorial** → **gameplay**.
+- **Loader** (archive picker) → **main menu** (Easy/Medium/Hard, optional Level Pack 1 and Original geoDefense, Leaderboards, Achievements, Options, Continue) → **level select** → **pre-game** (leaderboard + high score) → **tutorial** → **gameplay**.
 - **Level-select completion badges** — each mission row draws the native `Buttons.png` status sprite: perfect (no lives lost), completed, endless-scored, and the endless-unplayed ∞ marker, chosen from the local profile exactly as the native `LevelSelectScene` does.
 - Native **pause** flow (Resume, Quit, Restart, Options with confirmation prompts) and **game-over** layer (two-second input lock, randomized taunts, completion badge, tap-to-continue, victory fireworks).
 - **About/Credits** — the original 480×800 `Credits.png` art is shown full-screen (tap to dismiss) from the Options panel, matching the native `AboutScene`.
