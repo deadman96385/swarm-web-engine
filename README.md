@@ -16,11 +16,20 @@ Because the site ships no game data, you must supply the archive yourself. It is
 
 ## Play locally
 
-1. Run `npm run serve`.
-2. Open `http://127.0.0.1:4173` in a current browser.
-3. Choose your Windows Phone `.xap` (and optionally the iOS `.ipa`).
+Requires [Node.js](https://nodejs.org/) (18 or newer). No `npm install` is needed — the server and build use only Node built-ins.
 
-The archives are read entirely in the browser. They are never uploaded, copied into the build, or retained after the tab closes.
+**One click:** double-click **`start.cmd`** on Windows, or run **`./start.sh`** on macOS/Linux. The server starts and a browser tab opens automatically. Close the window (or press Ctrl+C) to stop.
+
+**From a terminal**, from the repository root:
+
+| Command | What it does |
+| --- | --- |
+| `npm start` | Serves on `http://127.0.0.1:4173` and opens your browser. |
+| `npm run serve` | Same server, without auto-opening the browser. |
+
+Set a different port with `PORT`, e.g. `PORT=4174 npm start`.
+
+Then choose your legally obtained Windows Phone `.xap` (and optionally the iOS `.ipa` for original audio and the Level Pack 1 bonus missions). The archives are read entirely in the browser — never uploaded, copied into the build, or retained after the tab closes. The dev server also enforces an allowlist: it serves only the engine's HTML/CSS/JS and returns 404 for anything else.
 
 ## Deploy
 
