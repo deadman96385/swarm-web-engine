@@ -1,0 +1,5 @@
+# Build output (produced by CI from source).
+dist/
+
+# Local tooling / working directories.
+node_modules/

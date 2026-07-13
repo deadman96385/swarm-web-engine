@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#020611">
+  <title>Swarm Web Engine</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">preservation web engine</p>
+        <h1>geoDefense <span>swarm</span></h1>
+      </div>
+      <button id="changeArchive" class="ghost" hidden>Change archive</button>
+    </header>
+
+    <section id="loader" class="loader panel">
+      <div class="loader-copy">
+        <p class="kicker">Bring your own game data</p>
+        <h2>Load an original Windows Phone archive</h2>
+        <p>This browser engine does not ship copyrighted art, audio, or levels. Choose your legally obtained Windows Phone <code>.xap</code> and, optionally, the iOS <code>.ipa</code> for original WAV audio. Both stay in this browser tab and are never uploaded.</p>
+      </div>
+      <label class="archive-button">
+        <input id="archiveInput" type="file" multiple accept=".xap,.ipa,.zip,application/zip">
+        <span>Choose game archive(s)</span>
+      </label>
+      <p id="loadStatus" class="status" aria-live="polite"></p>
+    </section>
+
+    <section id="mainMenuScreen" class="native-menu panel" hidden>
+      <div class="native-menu-buttons">
+        <button id="continueGame" class="action primary" hidden>Continue saved mission</button>
+        <button id="menuEasy" class="action">Easy levels</button><button id="menuMedium" class="action">Medium levels</button><button id="menuHard" class="action">Hard levels</button><button id="menuBonus" class="action" hidden>Level Pack 1</button>
+        <button id="menuLeaderboards" class="action">Leaderboards</button><button id="menuAchievements" class="action">Achievements</button><button id="menuOptions" class="action">Options</button>
+      </div>
+      <div id="menuDialog" class="menu-dialog" hidden><div class="menu-dialog-card"><h2 id="menuDialogTitle"></h2><div id="menuDialogBody"></div><button id="closeMenuDialog" class="ghost">Back</button></div></div>
+    </section>
+
+    <section id="levelScreen" class="panel" hidden>
+      <div class="section-heading">
+        <div><p class="kicker">mission select</p><h2>Choose a swarm</h2></div>
+        <div class="difficulty-tabs" id="difficultyTabs"></div>
+      </div>
+      <div class="mission-tools"><button id="backToMenu" class="ghost">&larr; Main menu</button></div>
+      <div id="levelGrid" class="level-grid"></div>
+    </section>
+
+    <section id="gameScreen" hidden>
+      <button id="toggleDesktopPanel" class="ghost desktop-panel-toggle" type="button" aria-expanded="false">Desktop controls</button>
+      <div class="game-layout">
+        <div class="stage panel">
+          <canvas id="game" width="480" height="800" aria-label="Game board"></canvas>
+          <div id="gameOverlay" class="game-overlay" hidden></div>
+          <div id="tutorialOverlay" class="tutorial-overlay" hidden><div id="tutorialCanvas" class="tutorial-canvas"><img id="tutorialImage" alt="Original mission tutorial"><div id="tutorialText" class="tutorial-text"></div><button id="closeTutorial" class="action primary">Begin mission</button></div></div>
+        </div>
+        <aside class="controls panel">
+          <button id="backToLevels" class="ghost">← Missions</button>
+          <div><p class="kicker" id="difficultyLabel"></p><h2 id="levelName"></h2><p id="levelDescription"></p></div>
+          <dl class="stats">
+            <div><dt>Credits</dt><dd id="cash">0</dd></div>
+            <div><dt>Lives</dt><dd id="lives">0</dd></div>
+            <div><dt>Wave</dt><dd id="wave">0/0</dd></div>
+            <div><dt>Score</dt><dd id="score">0</dd></div>
+            <div><dt>Multiplier</dt><dd id="multiplier">×1</dd></div>
+          </dl>
+          <div><p class="control-label">Build tower</p><div id="towerButtons" class="tower-buttons"></div></div>
+          <button id="upgradeTower" class="action" disabled>Upgrade selected tower</button>
+          <button id="laserLock" class="action" disabled>Lock Laser heading</button>
+          <button id="linkTower" class="action" disabled>Link selected tower</button>
+          <button id="sellTower" class="ghost" disabled>Sell selected tower</button>
+          <button id="startWave" class="action primary">Launch next wave</button>
+          <button id="pauseGame" class="ghost">Pause</button>
+          <p id="gameMessage" class="message" aria-live="polite">Select a tower, then tap an open hex.</p>
+          <details><summary>Controls</summary><p>Tap a tower type and then a hex to build. Tap an existing tower to select it. Towers fire automatically. Your maze must always leave a route from every entrance to its exit.</p></details>
+        </aside>
+      </div>
+    </section>
+
+    <div id="aboutOverlay" class="about-overlay" hidden><img id="aboutImage" alt="Original credits screen"></div>
+  </main>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

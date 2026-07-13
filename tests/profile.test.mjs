@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { ProfileStore } from '../src/profile.js';
+class MemoryStorage{constructor(){this.values=new Map();}getItem(k){return this.values.get(k)??null;}setItem(k,v){this.values.set(k,v);}}
+const level=(n,difficulty='Easy')=>({sourceName:`level-${difficulty}-${n}`,name:`Mission ${n}`,difficulty,lives:10,endless:false});
+const result=(score,lives=10,extra={})=>({won:true,score,lives,gotX50:false,placedTypes:[],fullyUpgraded:[],...extra});
+test('local profile preserves native high-score and perfect-run semantics',()=>{const storage=new MemoryStorage(),profile=new ProfileStore(storage),mission=level(1);profile.record(mission,result(100,10));assert.equal(profile.highScore(mission).livesLost,0);profile.record(mission,result(200,5));assert.equal(profile.highScore(mission).score,200);assert.equal(profile.highScore(mission).livesLost,0);profile.record(mission,result(50,10));assert.equal(profile.highScore(mission).score,200);assert.ok(profile.data.achievements.includes('E1'));assert.equal(new ProfileStore(storage).highScore(mission).score,200);});
+test('achievement qualification matches difficulty, tower, close-call, and toolbox rules',()=>{const profile=new ProfileStore(new MemoryStorage());for(let i=1;i<=9;i++)profile.record(level(i),result(i*100,10));profile.record(level(10),result(1000,10,{gotX50:true,fullyUpgraded:['BLASTER','LASER','MISSILE','SHOCK','POP'],placedTypes:['BLASTER','LASER','MISSILE','SHOCK','THUMP']}));const earned=new Set(profile.data.achievements);for(const code of ['E1','E2','E3','CC','LB','LL','LM','LS','LV','TH'])assert.ok(earned.has(code),code);});

@@ -1,0 +1,16 @@
+{
+  "name": "swarm-web-engine",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "serve": "node scripts/serve.mjs",
+    "visual:doctor": "agent-browser doctor",
+    "visual:smoke": "node scripts/visual-smoke.mjs"
+  },
+  "devDependencies": {
+    "agent-browser": "0.31.1"
+  }
+}
