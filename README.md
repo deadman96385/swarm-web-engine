@@ -12,6 +12,14 @@ Just open the hosted engine — it boots straight to the menu and is immediately
 
 If you own the originals, use **Help &amp; Options → Load original archives** to add your legally obtained `.xap` (and optionally the `.ipa`) for the authentic sprites, artwork, and WAV audio. The files are read locally; only the needed extracted assets are cached in that browser's site storage, and nothing is uploaded.
 
+### Install on a phone or tablet
+
+The deployed game is an installable PWA and works offline after its first successful load. On iPhone or iPad, open the site, choose **Share → Add to Home Screen**, and keep **Open as Web App** enabled. Chrome on Android exposes **Install app** in its menu, while Samsung Internet shows its install icon/Add to Home action. Supporting Chromium browsers also expose an **Install game** action in **Help & Options** when the browser makes its install prompt available.
+
+Installed iOS/iPadOS Home Screen web apps have storage isolated from Safari and are exempt from Safari's seven-day script-writable-storage cleanup. For play in an ordinary Safari tab, **Help & Options** also provides **Export save backup** and **Import save backup** actions for scores, achievements, options, procedural sets, and the current mission.
+
+The first visit to mission select shows a dismissible, platform-specific install suggestion. On Android it presents installation as optional and summarizes full-screen play, offline access, and the home-screen shortcut; on iPhone, iPad, and Safari on Mac it includes the storage guidance and an immediate backup action. Choosing **Not now** suppresses it for 30 days, and installed/standalone mode never shows it.
+
 ## Play locally
 
 Requires [Node.js](https://nodejs.org/) (18 or newer). No `npm install` is needed — the server and build use only Node built-ins.
@@ -42,7 +50,7 @@ The extractor reuses the same ZIP reader and .NET-resource decoder the runtime u
 
 ## Deploy
 
-Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs `node scripts/build.mjs` and publishes the generated `dist/` to GitHub Pages. The build has no dependencies (Node built-ins only) and copies the HTML, CSS, and JavaScript engine — including the bundled level data and localized strings. No sprite sheets, artwork, WAV audio, or game binaries are ever present in the repository or the deployed site. To publish anywhere else, run `npm run build` and serve the `dist/` directory as static files.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs `node scripts/build.mjs` and publishes the generated `dist/` to GitHub Pages. The build has no dependencies (Node built-ins only) and copies the HTML, CSS, JavaScript engine, web app manifest, service worker, and icons — including the bundled level data and localized strings. No sprite sheets, artwork, WAV audio, or game binaries are ever present in the repository or the deployed site. To publish anywhere else, run `npm run build` and serve the `dist/` directory as static files over HTTPS so installation and offline caching are available.
 
 **Enabling Pages (one time):** in the repository, go to *Settings → Pages → Build and deployment → Source* and select **GitHub Actions**.
 

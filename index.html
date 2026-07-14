@@ -4,7 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#020611">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="geoDefense">
   <title>Swarm Web Engine</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -27,6 +33,7 @@
         <input id="archiveInput" type="file" multiple accept=".xap,.ipa,.zip,application/zip">
         <span>Choose game archive(s)</span>
       </label>
+      <input id="backupInput" type="file" accept="application/json,.json" hidden>
       <p id="loadStatus" class="status" aria-live="polite"></p>
     </section>
 
@@ -95,6 +102,22 @@
         </aside>
       </div>
     </section>
+
+    <aside id="installSuggestionPrompt" class="install-suggestion-prompt" role="dialog" aria-modal="false" aria-labelledby="installSuggestionTitle" aria-describedby="installSuggestionCopy installSuggestionSteps" aria-live="polite" hidden>
+      <div class="install-suggestion-card">
+        <button id="closeInstallSuggestion" class="install-suggestion-close" type="button" aria-label="Dismiss install suggestion">×</button>
+        <p id="installSuggestionKicker" class="kicker"></p>
+        <h2 id="installSuggestionTitle"></h2>
+        <p id="installSuggestionCopy"></p>
+        <p id="installSuggestionSteps" class="install-suggestion-steps"></p>
+        <ul id="installSuggestionBenefits" class="install-suggestion-benefits" hidden><li>Full-screen play</li><li>Works offline</li><li>Home screen shortcut</li></ul>
+        <div class="install-suggestion-actions">
+          <button id="installSuggestionBackup" class="ghost" type="button" hidden>Export backup</button>
+          <button id="dismissInstallSuggestion" class="ghost" type="button">Not now</button>
+          <button id="acceptInstallSuggestion" class="action primary" type="button" hidden>Install game</button>
+        </div>
+      </div>
+    </aside>
 
     <div id="aboutOverlay" class="about-overlay" hidden><img id="aboutImage" alt="Original credits screen"></div>
   </main>

@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "geoDefense Swarm",
+  "short_name": "geoDefense",
+  "description": "Play geoDefense Swarm offline with complete campaigns, procedural art, and optional original game assets.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020611",
+  "theme_color": "#020611",
+  "categories": ["games"],
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ],
+  "screenshots": [
+    {"src": "screenshots/android-gameplay.png", "sizes": "390x650", "type": "image/png", "form_factor": "narrow", "label": "A geoDefense Swarm mission in progress"}
+  ]
+}

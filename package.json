@@ -11,7 +11,8 @@
     "test": "node --test",
     "serve": "node scripts/serve.mjs",
     "visual:doctor": "agent-browser doctor",
-    "visual:smoke": "node scripts/visual-smoke.mjs"
+    "visual:smoke": "node scripts/visual-smoke.mjs",
+    "visual:mobile": "node scripts/mobile-smoke.mjs"
   },
   "devDependencies": {
     "agent-browser": "0.31.1"

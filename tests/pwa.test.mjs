@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+test('web app manifest is installable from the deployment subdirectory',async()=>{const manifest=JSON.parse(await readFile(new URL('../manifest.webmanifest',import.meta.url),'utf8'));assert.equal(manifest.display,'standalone');assert.equal(manifest.orientation,'portrait-primary');assert.equal(manifest.start_url,'./');assert.equal(manifest.scope,'./');assert.ok(manifest.icons.some(icon=>icon.sizes==='192x192'));assert.ok(manifest.icons.some(icon=>icon.sizes==='512x512'&&icon.purpose.includes('maskable')));assert.ok(manifest.description);assert.ok(manifest.screenshots.some(image=>image.form_factor==='narrow'&&image.sizes==='390x650'));});
+test('Android promotional screenshot matches its manifest dimensions',async()=>{const image=await readFile(new URL('../screenshots/android-gameplay.png',import.meta.url));assert.equal(image.subarray(1,4).toString(),'PNG');assert.equal(image.readUInt32BE(16),390);assert.equal(image.readUInt32BE(20),650);});
+test('service worker precaches the playable shell',async()=>{const worker=await readFile(new URL('../sw.js',import.meta.url),'utf8');for(const path of ['./index.html','./styles.css','./screenshots/android-gameplay.png','./src/main.js','./src/install-suggestion.js','./src/game.js','./src/bundled-levels.js'])assert.ok(worker.includes(`'${path}'`),path);});

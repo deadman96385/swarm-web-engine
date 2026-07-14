@@ -8,8 +8,10 @@ const root=dirname(dirname(fileURLToPath(import.meta.url))),dist=join(root,'dist
 // one-time extraction was never run/committed.
 for(const f of ['src/bundled-levels.js','src/bundled-strings.js'])if(!existsSync(join(root,f))){console.error(`Missing ${f} — run "npm run extract-data" (needs the original archives) and commit the result.`);process.exit(1);}
 await rm(dist,{recursive:true,force:true});await mkdir(dist,{recursive:true});
-await Promise.all(['index.html','styles.css'].map(file=>cp(join(root,file),join(dist,file))));
+await Promise.all(['index.html','styles.css','manifest.webmanifest','sw.js'].map(file=>cp(join(root,file),join(dist,file))));
 await cp(join(root,'src'),join(dist,'src'),{recursive:true});
+await cp(join(root,'icons'),join(dist,'icons'),{recursive:true});
+await cp(join(root,'screenshots'),join(dist,'screenshots'),{recursive:true});
 // Serve the files verbatim on static hosts (e.g. GitHub Pages) without Jekyll processing.
 await writeFile(join(dist,'.nojekyll'),'');
 console.log('Built dependency-free static site in dist/ (bundled levels + strings, procedural art/audio)');
