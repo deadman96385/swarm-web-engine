@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { openZip } from '../src/zip.js';
 import { loadArchiveStrings, parseDotNetResources } from '../src/resources.js';
 
-test('the browser ZIP reader opens the preserved XAP and inflates its external data',async()=>{
-  const data=await readFile(new URL('../archive/geoDefense%20Swarm%20v1.0.23.0.xap',import.meta.url));
+// These tests exercise the OPTIONAL original archives. The engine plays without
+// them (bundled data + procedural assets); when the archives are placed in
+// ./archive they verify the import path still reads them correctly.
+const XAP=new URL('../archive/geoDefense%20Swarm%20v1.0.23.0.xap',import.meta.url);
+const IPA=new URL('../archive/geodefenseswarm-v1.3.ipa',import.meta.url);
+const noArchives='optional original archives not present in ./archive';
+
+test('the browser ZIP reader opens the preserved XAP and inflates its external data',{skip:existsSync(XAP)?false:noArchives},async()=>{
+  const data=await readFile(XAP);
   const archive=await openZip({arrayBuffer:async()=>data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength)});
   const levels=archive.names.filter(n=>/^Content\/MainLevels\/GAME_LEVEL_[EMH]_\d+\.xml$/.test(n));
   assert.equal(levels.length,30);
@@ -23,8 +31,8 @@ test('the browser ZIP reader opens the preserved XAP and inflates its external d
   assert.equal(tutorials.Upgrading,'Aktualisieren');
 });
 
-test('the optional iOS archive exposes browser-playable external WAV audio',async()=>{
-  const data=await readFile(new URL('../archive/geodefenseswarm-v1.3.ipa',import.meta.url));
+test('the optional iOS archive exposes browser-playable external WAV audio',{skip:existsSync(IPA)?false:noArchives},async()=>{
+  const data=await readFile(IPA);
   const archive=await openZip({arrayBuffer:async()=>data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength)});
   const sounds=archive.names.filter(n=>/\/(BlasterShot|LaserShot3|LaserBeam|Missile|Photon|David_EnemyPop|DeepThrob|PowerDown|MenuButton|Countdown_FemaleComputer_\d+)\.wav$/i.test(n));
   assert.equal(sounds.length,19);

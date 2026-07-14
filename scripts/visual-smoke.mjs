@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 
@@ -19,9 +20,11 @@ try{
   await waitForServer();
   await browser('open',url);
   await browser('set','viewport','1440','1000');
-  await browser('screenshot',resolve(output,'00-loader.png'),'--full');
-  await browser('upload','#archiveInput',xap,ipa);
+  // The engine auto-boots to the menu from bundled data — no upload required.
   await browser('wait','#mainMenuScreen');
+  await browser('screenshot',resolve(output,'00-main-menu-bundled.png'),'--full');
+  // If the optional originals are present, exercise the archive-import override.
+  if(existsSync(xap)){await browser('upload','#archiveInput',...(existsSync(ipa)?[xap,ipa]:[xap]));await browser('wait','#mainMenuScreen');}
   await browser('screenshot',resolve(output,'01-main-menu.png'),'--full');
   await writeFile(resolve(output,'01-main-menu.snapshot.txt'),await browser('snapshot','-i'));
   await browser('click','#menuEasy');

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node scripts/serve.mjs --open",
     "build": "node scripts/build.mjs",
+    "extract-data": "node scripts/extract-data.mjs",
     "test": "node --test",
     "serve": "node scripts/serve.mjs",
     "visual:doctor": "agent-browser doctor",

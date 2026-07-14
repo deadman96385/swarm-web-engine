@@ -1,6 +1,8 @@
 # Engine fidelity notes
 
-The shipped browser code contains no original game files or decompiled source. It is an independent JavaScript implementation informed by the data and behavior of the archived Windows Phone `geoLib.dll` version 1.1.1.0 and `geoDefenseSwarmWP7.dll` version 1.0.23.0.
+The shipped browser code contains no decompiled source. It is an independent JavaScript implementation informed by the data and behavior of the archived Windows Phone `geoLib.dll` version 1.1.1.0 and `geoDefenseSwarmWP7.dll` version 1.0.23.0.
+
+**Standalone by default.** The engine ships the level data and the localized UI strings and renders all art and audio procedurally: canvas/WebGL vector graphics (per-type creeps, oriented tower turrets, the honeycomb grid, range rings, Vortex/Thump shockwaves, a generated tiling backdrop texture), Web Audio sound effects, a formant-synthesized "female computer" countdown voice, and a generated "Mission Briefing" card that presents the bundled tutorial text when the original screenshots aren't loaded. It ships no sprite sheets, artwork, WAV audio, or game binaries. Loading the original `.xap`/`.ipa` is optional and swaps in the authentic sprites, full-screen artwork, tutorial screenshots, and WAV audio; the notes below describe the behavior reproduced in both modes.
 
 ## Recovered behavior now implemented
 

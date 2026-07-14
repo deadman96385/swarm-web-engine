@@ -1,18 +1,16 @@
 # Swarm Web Engine
 
-A dependency-free browser reimplementation of **geoDefense Swarm** (Critical Thought Games, 2009/2012). The engine is an independent JavaScript rewrite informed by the archived Windows Phone build; the deployable site contains **no** copyrighted game art, audio, binaries, or level data. Original assets and mission data are read out of an archive you supply, entirely in your browser, and are never uploaded or written into the build.
+A dependency-free browser reimplementation of **geoDefense Swarm** (Critical Thought Games, 2009/2012). The engine is an independent JavaScript rewrite informed by the archived Windows Phone build. It **plays standalone**: the site ships the mission/level data and localized UI text and renders **all graphics and audio procedurally** — canvas/WebGL vector art, Web Audio sound effects, and a formant-synthesized "female computer" countdown voice. It bundles **no** sprite sheets, artwork, WAV audio, or game binaries.
+
+Owners of the original Windows Phone `.xap` / iOS `.ipa` can *optionally* load them (from **Help &amp; Options → Load original archives**) to swap in the authentic sprites, artwork, and WAV audio. Those files are read entirely in your browser, never uploaded, and never written into the build; a **Use procedural art** toggle reverts at any time.
 
 ## Play online
 
-Open the hosted engine and load your own game files — nothing is downloaded from the site except the engine itself:
+Just open the hosted engine — it boots straight to the menu and is immediately playable, including the Level Pack 1 bonus missions and the 34-mission **Original geoDefense** campaign:
 
 **▶ https://deadman96385.github.io/swarm-web-engine/**
 
-1. Open the link above.
-2. Choose your legally obtained Windows Phone `.xap`.
-3. Optionally add your iOS `.ipa` in the same picker for the original WAV audio, the five Level Pack 1 bonus missions, and the 34-mission **Original geoDefense** campaign (the fixed creep-path levels from the predecessor game, bundled inside the iOS app).
-
-Because the site ships no game data, you must supply the archive yourself. It is read locally in your browser and never leaves the tab.
+If you own the originals, use **Help &amp; Options → Load original archives** to add your legally obtained `.xap` (and optionally the `.ipa`) for the authentic sprites, artwork, and WAV audio. The files are read locally in your browser and never leave the tab.
 
 ## Play locally
 
@@ -29,11 +27,22 @@ Requires [Node.js](https://nodejs.org/) (18 or newer). No `npm install` is neede
 
 Set a different port with `PORT`, e.g. `PORT=4174 npm start`.
 
-Then choose your legally obtained Windows Phone `.xap` (and optionally the iOS `.ipa` for original audio, the Level Pack 1 bonus missions, and the original *geoDefense* campaign). The archives are read entirely in the browser — never uploaded, copied into the build, or retained after the tab closes. The dev server also enforces an allowlist: it serves only the engine's HTML/CSS/JS and returns 404 for anything else.
+The page is playable immediately — no files to pick. Loading the original archives is optional (Help &amp; Options → Load original archives) and, like online, happens entirely in the browser. The dev server enforces an allowlist: it serves only the engine's HTML/CSS/JS and returns 404 for anything else.
+
+### Regenerating the bundled data (maintainers)
+
+The committed `src/bundled-levels.js` (69 missions) and `src/bundled-strings.js` (en/de/es/fr/it) are generated once from the original archives. To regenerate, place the `.xap`/`.ipa` in `archive/` (or pass a directory) and run:
+
+```
+npm run extract-data            # reads ./archive
+npm run extract-data /path/to/archives
+```
+
+The extractor reuses the same ZIP reader and .NET-resource decoder the runtime uses, so bundled data matches an archive import exactly. Only level XML and localized strings are extracted — never art or audio.
 
 ## Deploy
 
-Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs `node scripts/build.mjs` and publishes the generated `dist/` to GitHub Pages. The build has no dependencies (Node built-ins only) and copies just the HTML, CSS, and JavaScript engine — no game data is ever present in the repository or the deployed site. To publish anywhere else, run `npm run build` and serve the `dist/` directory as static files.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs `node scripts/build.mjs` and publishes the generated `dist/` to GitHub Pages. The build has no dependencies (Node built-ins only) and copies the HTML, CSS, and JavaScript engine — including the bundled level data and localized strings. No sprite sheets, artwork, WAV audio, or game binaries are ever present in the repository or the deployed site. To publish anywhere else, run `npm run build` and serve the `dist/` directory as static files.
 
 **Enabling Pages (one time):** in the repository, go to *Settings → Pages → Build and deployment → Source* and select **GitHub Actions**.
 
@@ -48,7 +57,7 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 - **iOS Level Pack 1** — when the `.ipa` is supplied, the five iOS-exclusive bonus missions (*Lesser Evil*, *Jellyfish*, *Stripes*, *Chromasome*, *The Groove*) load from it and appear under a dedicated **Level Pack 1** menu section. They are scored on the local leaderboard but kept out of the base Easy/Medium/Hard achievement counts.
 - **Original geoDefense campaign** — the `.ipa` also carries 34 complete levels (9 Easy, 12 Medium, 13 Hard) from the original *geoDefense* that the shipping Swarm app never loads. Supply the `.ipa` and they appear under an **Original geoDefense** menu section with their own Easy/Medium/Hard tabs. Unlike the Swarm maze, these use fixed creep paths (`<creepPath>` polylines): creeps stream along a drawn route and you build on the surrounding hexes — you can't build on the path, and Vortex is buildable. Scores go to the local leaderboard but, like Level Pack 1, are kept out of the Swarm achievement counts.
 - **Endless missions** — authored wave banks cycle and the native score-on-survival ending is preserved.
-- **Original presentation loaded at runtime** — main menu, level-select, and pre-game artwork; tutorial art paired with the archive's localized text, positions, wrapping, and scale; English plus packaged **German, Spanish, French, and Italian** managed-resource strings decoded straight from the `.xap`.
+- **Presentation** — menus, HUD, towers, creeps, shots, the hex grid, range/touch indicators, and the reactive spring-mesh backdrop are all drawn procedurally (additive canvas/WebGL). Localized UI text ships bundled: English plus **German, Spanish, French, and Italian**. Loading the original `.xap` swaps in the authentic sprite sheets, full-screen artwork, and tutorial images (paired with the localized text, positions, wrapping, and scale).
 
 ### Towers (6 classes, 7 tiers)
 - **Blaster, Laser, Missile, Shock, Thump, Vortex** — native ranges, seven damage tiers, shot counts, recharge timing, timed upgrades, and resale accounting.
@@ -66,7 +75,7 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 - Native distance-to-exit **score multiplier** bonuses (×5/×10/×20/×50 close-call thresholds).
 
 ### Screens and flow
-- **Loader** (archive picker) → **main menu** (Easy/Medium/Hard, optional Level Pack 1 and Original geoDefense, Leaderboards, Achievements, Options, Continue) → **level select** → **pre-game** (leaderboard + high score) → **tutorial** → **gameplay**.
+- Boots straight to the **main menu** (Easy/Medium/Hard, Level Pack 1, Original geoDefense, Leaderboards, Achievements, Help &amp; Options, Continue) → **level select** → **pre-game** (leaderboard + high score) → **tutorial** (a generated "Mission Briefing" card built from the bundled localized text, or the original screenshot art when an archive is loaded) → **gameplay**.
 - **Level-select completion badges** — each mission row draws the native `Buttons.png` status sprite: perfect (no lives lost), completed, endless-scored, and the endless-unplayed ∞ marker, chosen from the local profile exactly as the native `LevelSelectScene` does.
 - Native **pause** flow (Resume, Quit, Restart, Options with confirmation prompts) and **game-over** layer (two-second input lock, randomized taunts, completion badge, tap-to-continue, victory fireworks).
 - **About/Credits** — the original 480×800 `Credits.png` art is shown full-screen (tap to dismiss) from the Options panel, matching the native `AboutScene`.
@@ -76,8 +85,8 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 
 ### Input and rendering
 - Touch, mouse, and pointer input; tap-to-select, drag-to-build from the tower bar, drag-to-link, and double-tap Laser lock. Responsive layout around the native 480×800 surface, with an optional collapsible desktop control sidebar.
-- Additive sprite blending, touch/range indicators (Glow/Star/Flare/Ring frames with random-rotation and fade variants), drag-driven honeycomb brightness, floating multiplier text, doubled `BoomAt` particle counts, 1.5× explosion impulse, and the 31×51 spring-mesh dynamic backdrop (WebGL, with a tiled fallback).
-- **Audio** is SFX-only, matching the original (there is no music track): shots, pops, the low-life female countdown voice (10→1), and menu clicks, played from the optional `.ipa` WAVs.
+- Additive sprite blending, touch/range indicators (Glow/Star/Flare/Ring frames with random-rotation and fade variants), drag-driven honeycomb brightness, floating multiplier text, doubled `BoomAt` particle counts, 1.5× explosion impulse, and the 31×51 spring-mesh dynamic backdrop (WebGL, with a tiled fallback). Every original sprite has a procedural vector fallback — per-type creep shapes, oriented tower turrets, the honeycomb grid, range rings, and Vortex/Thump shockwaves — so with no archive loaded the game renders entirely from code, and the backdrop mesh runs on a generated tiling texture.
+- **Audio** is SFX-only, matching the original (no music): shots, pops, menu clicks, and the countdown are synthesized in the Web Audio API at boot — zero audio files. The low-life countdown (10→1) is spoken by a small **formant speech synthesizer** for the original's robotic "female computer" voice, identical on every device. Loading the `.ipa` replaces the synth bank with the original WAVs.
 
 ---
 
@@ -104,10 +113,10 @@ This is tracked explicitly so passing tests are not mistaken for complete native
 
 ## Tests
 
-Run `npm test`. The suite exercises the two real archives, ZIP inflation, audio discovery, hex routing, the native health/speed/wealth formulas, placement safety, economy, the upgrade/resale lifecycle, overlapping waves, and win/loss ordering.
+Run `npm test`. The suite exercises level XML parsing over the bundled data, hex routing, the native health/speed/wealth formulas, placement safety, economy, the upgrade/resale lifecycle, overlapping waves, and win/loss ordering. Two tests cover the optional archive-import path (ZIP inflation, .NET-resource decoding, audio discovery) and **skip automatically** unless the original `.xap`/`.ipa` are present in `archive/`.
 
 ## Visual parity workflow
 
-Run `npm run visual:doctor` once to verify Chrome, then `npm run visual:smoke`. The latter starts the allowlisted local server, drives it with the pinned `agent-browser` CLI, uploads your local `.xap`/`.ipa` through the real file input, and captures loader, main-menu, level-select, pre-game, gameplay, pause, and game-over states.
+Run `npm run visual:doctor` once to verify Chrome, then `npm run visual:smoke`. The latter starts the allowlisted local server, drives it with the pinned `agent-browser` CLI, and captures the standalone (bundled + procedural) menu, level-select, pre-game, gameplay, pause, and game-over states. If the original `.xap`/`.ipa` are present in `archive/`, it also exercises the archive-import override.
 
-> These captures render the runtime-loaded **original artwork**, so they are written only to the git-ignored `.visual/` directory and are never committed — the repository stays free of copyrighted content.
+> Captures are written only to the git-ignored `.visual/` directory and are never committed, so any run that loads the original artwork keeps it out of the repository.

@@ -81,10 +81,29 @@ export class DynamicBackdrop {
     for(let row=minY;row<maxY;row++)for(let column=minX;column<maxX;column++){const i=row*this.gridX+column,p=i*2,dx=this.positions[p]-x,dy=this.positions[p+1]-y,distance=Math.hypot(dx,dy);if(distance>=range)continue;const impulse=force*(1-distance/range);if(impulse<=0)continue;const nx=distance?dx/distance:0,ny=distance?dy/distance:0;this.positions[p]+=nx*impulse;this.positions[p+1]+=ny*impulse;this.pressures[i]+=impulse;}
   }
 
+  // A 256x256 (power-of-two, for gl.REPEAT) seamlessly-tiling nebula, built
+  // once and cached as a stable object so the renderer's identity cache holds.
+  // Summing sine terms with integer spatial frequencies guarantees the tile
+  // wraps without a seam. Serves as both a WebGL texture and a 2D pattern.
+  ensureProceduralTexture(){
+    if(this.proceduralTexture!==undefined)return this.proceduralTexture;
+    const size=256,cv=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(size,size):document.createElement('canvas');cv.width=size;cv.height=size;
+    const g=cv.getContext('2d');if(!g){this.proceduralTexture=null;return null;}
+    const img=g.createImageData(size,size),d=img.data,TAU=Math.PI*2;
+    const terms=[[1,0,0.0,0.50],[0,1,1.3,0.50],[2,3,0.7,0.35],[3,-2,2.1,0.30],[5,4,4.0,0.18],[4,-6,1.1,0.15]];
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+      const u=x/size,v=y/size;let n=0;for(const[a,b,ph,w]of terms)n+=Math.sin(TAU*(a*u+b*v)+ph)*w;
+      const t=Math.max(0,Math.min(1,(n/1.98)*0.5+0.5)),o=(y*size+x)*4;
+      d[o]=Math.round(20+40*t);d[o+1]=Math.round(60+120*t);d[o+2]=Math.round(110+140*t);d[o+3]=255; // dark bluish nebula
+    }
+    g.putImageData(img,0,0);this.proceduralTexture=cv;return cv;
+  }
+
   draw(context,image){
-    if(!image)return;if(!this.renderer&&!this.rendererFailed)try{this.renderer=new BackdropMeshRenderer(this);}catch{this.rendererFailed=true;}
-    if(this.renderer){context.drawImage(this.renderer.render(this,image),0,0);return;}
-    const pattern=context.createPattern(image,'repeat');context.save();context.globalAlpha=.72;context.fillStyle=pattern;context.fillRect(0,0,this.width,this.height);context.restore();
+    const tex=image??this.ensureProceduralTexture();if(!tex)return;
+    if(!this.renderer&&!this.rendererFailed)try{this.renderer=new BackdropMeshRenderer(this);}catch{this.rendererFailed=true;}
+    if(this.renderer){context.drawImage(this.renderer.render(this,tex),0,0);return;}
+    const pattern=context.createPattern(tex,'repeat');context.save();context.globalAlpha=.72;context.fillStyle=pattern;context.fillRect(0,0,this.width,this.height);context.restore();
   }
 
   dispose(){
