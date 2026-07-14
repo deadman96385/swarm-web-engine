@@ -14,7 +14,7 @@ If you own the originals, use **Help &amp; Options → Load original archives** 
 
 ### Install on a phone or tablet
 
-The deployed game is an installable PWA and works offline after its first successful load. On iPhone or iPad, open the site, choose **Share → Add to Home Screen**, and keep **Open as Web App** enabled. Chrome on Android exposes **Install app** in its menu, while Samsung Internet shows its install icon/Add to Home action. Supporting Chromium browsers also expose an **Install game** action in **Help & Options** when the browser makes its install prompt available.
+The deployed game is an installable PWA and works offline after its first successful load. On iPhone or iPad, open the site in Safari, choose **Share → Add to Home Screen**, and keep **Open as Web App** enabled; Chrome on iOS shows guidance to hand the page off to Safari first. Chrome on Android exposes **Install app** in its menu, while Samsung Internet shows its install icon/Add to Home action. Supporting Chromium browsers also expose an **Install game** action in **Help & Options** when the browser makes its install prompt available.
 
 Installed iOS/iPadOS Home Screen web apps have storage isolated from Safari and are exempt from Safari's seven-day script-writable-storage cleanup. For play in an ordinary Safari tab, **Help & Options** also provides **Export save backup** and **Import save backup** actions for scores, achievements, options, procedural sets, and the current mission.
 
