@@ -27,7 +27,7 @@ try{
   if(existsSync(xap)){await browser('upload','#archiveInput',...(existsSync(ipa)?[xap,ipa]:[xap]));await browser('wait','#mainMenuScreen');}
   await browser('screenshot',resolve(output,'01-main-menu.png'),'--full');
   await writeFile(resolve(output,'01-main-menu.snapshot.txt'),await browser('snapshot','-i'));
-  await browser('click','#menuEasy');
+  await browser('click','#menuSwarm');
   await browser('wait','#levelGrid .level-card');
   await browser('screenshot',resolve(output,'02-level-select.png'),'--full');
   await browser('click','#levelGrid .level-card');
@@ -66,7 +66,10 @@ try{
   await browser('click','#backToLevels');
   await browser('wait','#levelGrid .level-card');
   await browser('click','#backToMenu');
-  await browser('click','#menuMedium');
+  await browser('click','#menuSwarm');
+  await browser('wait','#levelGrid .level-card');
+  // Switch to the Medium difficulty tab (2nd tab) to reach the game-over mission.
+  await browser('eval',"[...document.querySelectorAll('#difficultyTabs button')].find(b=>/Medium/.test(b.textContent)).click()");
   await browser('wait','#levelGrid .level-card');
   await browser('click','#levelGrid .level-card:nth-child(8)');
   await browser('wait','#playMission');

@@ -6,6 +6,7 @@ import { ACHIEVEMENTS, ProfileStore } from './profile.js';
 import { loadArchiveStrings } from './resources.js';
 import { BASE_RE, classifyName, buildLevels } from './level-index.js';
 import { entries as bundledEntries } from './bundled-levels.js';
+import { entries as lhcEntries } from './lhc-levels.js';
 import { strings as bundledStrings } from './bundled-strings.js';
 import { createSynthAudioBank } from './synth-audio.js';
 
@@ -31,7 +32,9 @@ function artBackground(img,shade='.34'){return img?`linear-gradient(rgba(0,4,15,
 // original .xap/.ipa is an OPTIONAL override that swaps in the authentic raster
 // sprites/art and WAV audio; both paths funnel through the same apply* helpers.
 const RASTER_PNGS=['Content/BackdropP1.png','Content/Honeycomb.png','Content/Towers.png','Content/Creeps.png','Content/Shots.png','Content/MainMenu.png','Content/LevelSelect.png','Content/PreGame.png','Content/Buttons.png','Content/BuildBar.png','Content/TowerBar.png','Content/ScoreBar.png','Content/TouchIndicators.png','Content/Credits.png',...Array.from({length:9},(_,i)=>`Content/Tutorials/t${i+1}.png`)];
-function applyLevels(entries){levels=buildLevels(entries,parseLevel);}
+// The LHC pack is a repo-bundled fan campaign (procedural, archive-independent),
+// so it rides along in both the bundled boot and an original-archive import.
+function applyLevels(entries){levels=buildLevels([...entries,...lhcEntries],parseLevel);}
 function applyStrings(map){strings=map;assets.strings=strings;localizeMenu();}
 async function collectEntries(opened){const out=[];for(const z of opened)for(const name of z.names)if(classifyName(name))out.push({sourceName:name,xml:await z.text(name)});return out;}
 async function applyRasterAssets(){disposeAssets();const loaded=await Promise.all(RASTER_PNGS.map(loadImage));const [backdrop,honeycomb,towers,creeps,shots,mainMenu,levelSelect,preGame,buttons,buildBar,towerBar,scoreBar,touchIndicators,credits,...tutorials]=loaded;assets={backdrop,honeycomb,towers,creeps,shots,mainMenu,levelSelect,preGame,buttons,buildBar,towerBar,scoreBar,touchIndicators,credits,tutorials:Object.fromEntries(tutorials.map((img,i)=>[`t${i+1}`,img]))};assets.strings=strings;$('mainMenuScreen').style.backgroundImage=artBackground(mainMenu,'.12');$('levelScreen').style.backgroundImage=artBackground(levelSelect,'.68');}
@@ -40,10 +43,21 @@ async function bootBundled(){game?.destroy();game=null;archive=null;disposeAsset
 
 $('archiveInput').addEventListener('change',async e=>{const files=[...e.target.files];if(!files.length)return;try{setStatus(`Reading ${files.length} archive${files.length===1?'':'s'} locally…`);const opened=await Promise.all(files.map(openZip));archive=opened.find(z=>z.names.some(n=>BASE_RE.test(n)));if(!archive)throw new Error('Include the original Windows Phone .xap.');applyLevels(await collectEntries(opened));const audioArchive=opened.find(z=>z.names.some(n=>n.toLowerCase().endsWith('/blastershot.wav')));audioBank?.dispose();audioBank=await AudioBank.fromArchive(audioArchive)??await createSynthAudioBank();audioBank.enabled=options.sound;applyStrings(await loadArchiveStrings(archive));setStatus('Preparing original presentation…');await applyRasterAssets();$('changeArchive').hidden=false;setStatus('');showMainMenu();}catch(err){console.error(err);setStatus(err.message,true);}});
 
-async function showMainMenu(){game?.destroy();game=null;audioBank?.play('menu');$('menuDialog').hidden=true;const save=readSave(),savedLevel=save&&levels.find(l=>l.sourceName===save.level);$('continueGame').hidden=!savedLevel;if(savedLevel)$('continueGame').onclick=()=>startLevel(savedLevel,save.state);$('menuBonus').hidden=!levels.some(l=>l.difficulty==='Bonus');$('menuClassic').hidden=!levels.some(l=>l.campaign==='classic');show($('mainMenuScreen'));}
-function localizeMenu(){$('continueGame').textContent=t('ContinueSaved','Continue saved mission');$('menuEasy').textContent=t('EasyLevels','Easy levels');$('menuMedium').textContent=t('MediumLevels','Medium levels');$('menuHard').textContent=t('HardLevels','Hard levels');$('menuLeaderboards').textContent=t('Leaderboards','Leaderboards');$('menuAchievements').textContent=t('Achievements','Achievements');$('menuOptions').textContent=t('Options','Options');$('closeMenuDialog').textContent=t('Back','Back');$('backToMenu').textContent=`← ${t('MainMenu','Main menu')}`;$('levelScreen').querySelector('.section-heading h2').textContent=t('SelectLevel','Select level');}
-function enterDifficulty(difficulty,campaign='swarm'){currentCampaign=campaign;currentDifficulty=difficulty;renderLevels();audioBank?.play('menu');show($('levelScreen'));}
-$('menuEasy').onclick=()=>enterDifficulty('Easy');$('menuMedium').onclick=()=>enterDifficulty('Medium');$('menuHard').onclick=()=>enterDifficulty('Hard');$('menuBonus').onclick=()=>enterDifficulty('Bonus');$('menuClassic').onclick=()=>enterDifficulty('Easy','classic');$('backToMenu').onclick=showMainMenu;
+// Menu structure: two core campaigns (base Swarm, Original geoDefense) plus a
+// data-driven list of expansion packs. Each campaign's Easy/Medium/Hard (and
+// Swarm's Bonus/Level Pack 1) live behind the level-screen difficulty tabs, so a
+// single menu button opens the whole set. Ship a new expansion by adding its
+// levels module (merged in applyLevels) and one entry here.
+const EXPANSIONS=[{campaign:'lhc',title:'LHC // Breach Grid'}];
+const CAMPAIGN_TITLES={swarm:'geoDefense Swarm',classic:'Original geoDefense',...Object.fromEntries(EXPANSIONS.map(e=>[e.campaign,e.title]))};
+function campaignDifficulties(campaign){return ['Easy','Medium','Hard','Bonus'].filter(d=>levels.some(l=>(l.campaign??'swarm')===campaign&&l.difficulty===d));}
+function firstDifficulty(campaign){return campaignDifficulties(campaign)[0]??'Easy';}
+function openCampaign(campaign){enterDifficulty(firstDifficulty(campaign),campaign);}
+
+async function showMainMenu(){game?.destroy();game=null;audioBank?.play('menu');$('menuDialog').hidden=true;const save=readSave(),savedLevel=save&&levels.find(l=>l.sourceName===save.level);$('continueGame').hidden=!savedLevel;if(savedLevel)$('continueGame').onclick=()=>startLevel(savedLevel,save.state);$('menuClassic').hidden=!levels.some(l=>l.campaign==='classic');const active=EXPANSIONS.filter(e=>levels.some(l=>l.campaign===e.campaign));$('expansionsGroup').hidden=!active.length;$('expansionButtons').replaceChildren(...active.map(e=>{const b=document.createElement('button');b.className='action';b.textContent=e.title;b.onclick=()=>openCampaign(e.campaign);return b;}));show($('mainMenuScreen'));}
+function localizeMenu(){$('continueGame').textContent=t('ContinueSaved','Continue saved mission');$('menuSwarm').textContent=CAMPAIGN_TITLES.swarm;$('menuClassic').textContent=CAMPAIGN_TITLES.classic;$('menuLeaderboards').textContent=t('Leaderboards','Leaderboards');$('menuAchievements').textContent=t('Achievements','Achievements');$('menuOptions').textContent=t('Options','Options');$('closeMenuDialog').textContent=t('Back','Back');$('backToMenu').textContent=`← ${t('MainMenu','Main menu')}`;$('levelScreen').querySelector('.section-heading h2').textContent=t('SelectLevel','Select level');}
+function enterDifficulty(difficulty,campaign='swarm'){currentCampaign=campaign;currentDifficulty=difficulty;$('levelScreen').querySelector('.section-heading h2').textContent=CAMPAIGN_TITLES[campaign]??t('SelectLevel','Select level');renderLevels();audioBank?.play('menu');show($('levelScreen'));}
+$('menuSwarm').onclick=()=>openCampaign('swarm');$('menuClassic').onclick=()=>openCampaign('classic');$('backToMenu').onclick=showMainMenu;
 
 function openMenuDialog(title){$('menuDialogTitle').textContent=title;$('menuDialogBody').replaceChildren();$('menuDialog').hidden=false;audioBank?.play('menu');return $('menuDialogBody');}
 $('closeMenuDialog').onclick=()=>{$('menuDialog').hidden=true;audioBank?.play('menu');};

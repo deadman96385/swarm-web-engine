@@ -12,6 +12,10 @@
 export const BASE_RE = /^Content\/MainLevels\/GAME_LEVEL_[EMH]_\d+\.xml$/i;
 // iOS Level Pack 1 bonus missions (either archive), e.g. GAME_LEVEL_LP1_M_0001.xml.
 export const LP_RE = /(^|\/)GAME_LEVEL_LP\d+_[EMH]_\d+\.xml$/i;
+// "LHC" fan-made security-themed pack shipped in-repo (src/lhc-levels.js), not
+// from any original archive: GAME_LEVEL_LHC_[EMH]_####.xml. Its own campaign so
+// it lists separately from the base Swarm/Bonus/Original missions.
+export const LHC_RE = /(^|\/)GAME_LEVEL_LHC_[EMH]_\d+\.xml$/i;
 // Original geoDefense fixed-path levels sit at the .ipa bundle root, sharing the
 // GAME_LEVEL_[EMH]_#### shape but never under SwarmLevels/ or MainLevels/.
 const CLASSIC_TAIL_RE = /GAME_LEVEL_[EMH]_\d+\.xml$/i;
@@ -20,6 +24,7 @@ const CLASSIC_EXCLUDE_RE = /\/(SwarmLevels|MainLevels)\//i;
 export function classifyName(name) {
   if (BASE_RE.test(name)) return 'base';
   if (LP_RE.test(name)) return 'lp';
+  if (LHC_RE.test(name)) return 'lhc';
   if (CLASSIC_TAIL_RE.test(name) && !CLASSIC_EXCLUDE_RE.test(name)) return 'classic';
   return null;
 }
@@ -37,11 +42,12 @@ export function diffRank(difficulty) {
 // parseLevel: (xml, sourceName, difficulty?, campaign?) => level object.
 // Returns the combined, per-bucket-sorted levels array: [...base, ...lp, ...classic].
 export function buildLevels(entries, parseLevel) {
-  const base = [], lp = [], classic = [];
+  const base = [], lp = [], classic = [], lhc = [];
   for (const { sourceName, xml } of entries) {
     switch (classifyName(sourceName)) {
       case 'base': base.push(parseLevel(xml, sourceName)); break;
       case 'lp': lp.push(parseLevel(xml, sourceName, 'Bonus')); break;
+      case 'lhc': lhc.push(parseLevel(xml, sourceName, null, 'lhc')); break;
       case 'classic': {
         const level = parseLevel(xml, sourceName, null, 'classic');
         if (level.pathMode) classic.push(level); // fixed-path levels only
@@ -52,5 +58,6 @@ export function buildLevels(entries, parseLevel) {
   base.sort((a, b) => a.id - b.id);
   lp.sort((a, b) => lpRank(a.sourceName) - lpRank(b.sourceName));
   classic.sort((a, b) => diffRank(a.difficulty) - diffRank(b.difficulty) || a.id - b.id);
-  return [...base, ...lp, ...classic];
+  lhc.sort((a, b) => diffRank(a.difficulty) - diffRank(b.difficulty) || a.id - b.id);
+  return [...base, ...lp, ...classic, ...lhc];
 }
