@@ -17,3 +17,13 @@ test('classic campaign scores stay out of the Swarm difficulty achievements',()=
   profile.record({sourceName:'swarm-E-1',name:'S1',difficulty:'Easy',campaign:'swarm',lives:10,endless:false},result(100,10));
   assert.ok(new Set(profile.data.achievements).has('E1'));
 });
+test('procedural scores persist per seed without farming authored difficulty achievements',()=>{
+  const profile=new ProfileStore(new MemoryStorage());
+  for(let i=1;i<=9;i++)profile.record({sourceName:`Procedural/v1/GAME_LEVEL_PROC_E_NORMAL_${i.toString(16).padStart(8,'0')}.xml`,name:`Seed ${i}`,difficulty:'Easy',campaign:'procedural',lives:10,endless:false},result(i*100,10));
+  const earned=new Set(profile.data.achievements);
+  assert.ok(!earned.has('E1'));assert.ok(!earned.has('E2'));assert.ok(!earned.has('E3'));
+  assert.equal(profile.leaderboard().length,9);
+  assert.equal(profile.highScore({sourceName:'Procedural/v1/GAME_LEVEL_PROC_E_NORMAL_00000009.xml'}).score,900);
+  profile.record({sourceName:'Procedural/v1/GAME_LEVEL_PROC_H_RANDOM_FFFFFFFF.xml',name:'Toolbox Seed',difficulty:'Hard',campaign:'procedural',lives:10,endless:false},result(1200,10,{gotX50:true,fullyUpgraded:['BLASTER'],placedTypes:['BLASTER','LASER','MISSILE','SHOCK','THUMP']}));
+  const earned2=new Set(profile.data.achievements);assert.ok(earned2.has('CC'));assert.ok(earned2.has('LB'));assert.ok(earned2.has('TH'));
+});

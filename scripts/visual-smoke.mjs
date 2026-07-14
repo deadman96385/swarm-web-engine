@@ -27,6 +27,19 @@ try{
   if(existsSync(xap)){await browser('upload','#archiveInput',...(existsSync(ipa)?[xap,ipa]:[xap]));await browser('wait','#mainMenuScreen');}
   await browser('screenshot',resolve(output,'01-main-menu.png'),'--full');
   await writeFile(resolve(output,'01-main-menu.snapshot.txt'),await browser('snapshot','-i'));
+  await browser('eval',"[...document.querySelectorAll('#expansionButtons button')].find(b=>/Procedural Swarm/.test(b.textContent)).click()");
+  await browser('wait','#proceduralTools');
+  if(!(await browser('get','count','#levelGrid .level-card')).includes('4'))throw new Error('Procedural Swarm did not present four generated missions.');
+  await browser('screenshot',resolve(output,'01a-procedural-swarm.png'),'--full');
+  await browser('click','#proceduralRandom');
+  await browser('click','#rerollProcedural');
+  await browser('eval',"document.querySelector('#proceduralSeed').value='A1B2C3D4';document.querySelector('#loadProceduralSeed').click()");
+  if(!(await browser('get','text','#levelGrid')).includes('A1B2C3D4'))throw new Error('Procedural seed entry did not restore the requested mission.');
+  await browser('click','#levelGrid .level-card');
+  await browser('wait','#playMission');
+  if(!(await browser('get','text','.pregame-seed')).includes('A1B2C3D4'))throw new Error('Procedural pre-game card lost its seed identity.');
+  await browser('click','#cancelMission');
+  await browser('click','#backToMenu');
   await browser('click','#menuSwarm');
   await browser('wait','#levelGrid .level-card');
   await browser('screenshot',resolve(output,'02-level-select.png'),'--full');

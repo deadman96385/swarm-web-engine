@@ -16,6 +16,9 @@ export const LP_RE = /(^|\/)GAME_LEVEL_LP\d+_[EMH]_\d+\.xml$/i;
 // from any original archive: GAME_LEVEL_LHC_[EMH]_####.xml. Its own campaign so
 // it lists separately from the base Swarm/Bonus/Original missions.
 export const LHC_RE = /(^|\/)GAME_LEVEL_LHC_[EMH]_\d+\.xml$/i;
+// Runtime-generated, versioned Procedural Swarm missions. The source name is a
+// complete replay identity: generator version + difficulty + economy + seed.
+export const PROC_RE = /^Procedural\/v(\d+)\/GAME_LEVEL_PROC_([EMH])_(NORMAL|RANDOM)_([0-9A-F]{8})\.xml$/i;
 // Original geoDefense fixed-path levels sit at the .ipa bundle root, sharing the
 // GAME_LEVEL_[EMH]_#### shape but never under SwarmLevels/ or MainLevels/.
 const CLASSIC_TAIL_RE = /GAME_LEVEL_[EMH]_\d+\.xml$/i;
@@ -25,8 +28,20 @@ export function classifyName(name) {
   if (BASE_RE.test(name)) return 'base';
   if (LP_RE.test(name)) return 'lp';
   if (LHC_RE.test(name)) return 'lhc';
+  if (PROC_RE.test(name)) return 'procedural';
   if (CLASSIC_TAIL_RE.test(name) && !CLASSIC_EXCLUDE_RE.test(name)) return 'classic';
   return null;
+}
+
+export function parseProceduralIdentity(name) {
+  const match = name.match(PROC_RE);
+  if (!match) return null;
+  return {
+    version: Number(match[1]),
+    difficulty: { E: 'Easy', M: 'Medium', H: 'Hard' }[match[2].toUpperCase()],
+    economyMode: match[3].toLowerCase(),
+    seed: match[4].toUpperCase()
+  };
 }
 
 export function lpRank(name) {
@@ -42,12 +57,19 @@ export function diffRank(difficulty) {
 // parseLevel: (xml, sourceName, difficulty?, campaign?) => level object.
 // Returns the combined, per-bucket-sorted levels array: [...base, ...lp, ...classic].
 export function buildLevels(entries, parseLevel) {
-  const base = [], lp = [], classic = [], lhc = [];
+  const base = [], lp = [], classic = [], lhc = [], procedural = [];
   for (const { sourceName, xml } of entries) {
     switch (classifyName(sourceName)) {
       case 'base': base.push(parseLevel(xml, sourceName)); break;
       case 'lp': lp.push(parseLevel(xml, sourceName, 'Bonus')); break;
       case 'lhc': lhc.push(parseLevel(xml, sourceName, null, 'lhc')); break;
+      case 'procedural': {
+        const identity = parseProceduralIdentity(sourceName);
+        const level = parseLevel(xml, sourceName, identity.difficulty, 'procedural');
+        level.procedural = identity;
+        procedural.push(level);
+        break;
+      }
       case 'classic': {
         const level = parseLevel(xml, sourceName, null, 'classic');
         if (level.pathMode) classic.push(level); // fixed-path levels only
@@ -59,5 +81,6 @@ export function buildLevels(entries, parseLevel) {
   lp.sort((a, b) => lpRank(a.sourceName) - lpRank(b.sourceName));
   classic.sort((a, b) => diffRank(a.difficulty) - diffRank(b.difficulty) || a.id - b.id);
   lhc.sort((a, b) => diffRank(a.difficulty) - diffRank(b.difficulty) || a.id - b.id);
-  return [...base, ...lp, ...classic, ...lhc];
+  procedural.sort((a, b) => diffRank(a.difficulty) - diffRank(b.difficulty) || a.id - b.id);
+  return [...base, ...lp, ...classic, ...lhc, ...procedural];
 }
