@@ -51,7 +51,7 @@ export class Game {
   canPlace(type,cell){const key=cellKey(...cell),def=this.level.towers.find(t=>t.type===type);
     if(this.pathMode){if(!def)return {ok:false,reason:'That tower is not available in this mission.'};if(this.towers.has(key))return {ok:false,reason:'A tower already occupies that hex.'};if(this.level.blocked.has(key))return {ok:false,reason:"You can't build on the creep path."};if(this.cash<def.cost)return {ok:false,reason:'Not enough credits.'};return {ok:true,reason:''};}
     if(!def||type==='POP')return {ok:false,reason:'That tower cannot be built in Swarm.'};if(this.towers.has(key)||this.level.blocked.has(key)||this.level.pass.has(key)||this.level.spawns.some(s=>cellKey(...s.cell)===key)||[...this.level.exits.values()].some(e=>cellKey(...e)===key))return {ok:false,reason:'That hex is unavailable.'};if(this.cash<def.cost)return {ok:false,reason:'Not enough credits.'};if(!this.allRoutes(this.blocked(cell)))return {ok:false,reason:'That tower would seal an entrance.'};return {ok:true,reason:''};}
-  setBuildPreview(type,clientX,clientY){const rect=this.canvas.getBoundingClientRect(),rawX=(clientX-rect.left)*480/rect.width,rawY=(clientY-rect.top)*800/rect.height,x=rawX,y=rawY-(this.placeAboveFinger?96:0);if(this.lastBuildPointer)this.hexBrightnessImpulse=Math.hypot(rawX-this.lastBuildPointer.x,rawY-this.lastBuildPointer.y)*.75;this.lastBuildPointer={x:rawX,y:rawY};if(x<0||y<0||x>480||y>800){this.buildPreview=null;return;}const cell=pixelToHex(x,y);this.buildPreview=cell?{type,cell,...this.canPlace(type,cell)}:null;}
+  setBuildPreview(type,clientX,clientY,pointerType='mouse'){const rect=this.canvas.getBoundingClientRect(),rawX=(clientX-rect.left)*480/rect.width,rawY=(clientY-rect.top)*800/rect.height,x=rawX,y=rawY-(this.placeAboveFinger&&pointerType==='touch'?96:0);if(this.lastBuildPointer)this.hexBrightnessImpulse=Math.hypot(rawX-this.lastBuildPointer.x,rawY-this.lastBuildPointer.y)*.75;this.lastBuildPointer={x:rawX,y:rawY};if(x<0||y<0||x>480||y>800){this.buildPreview=null;return;}const cell=pixelToHex(x,y);this.buildPreview=cell?{type,cell,...this.canPlace(type,cell)}:null;}
   commitBuildPreview(){const preview=this.buildPreview;this.buildPreview=null;this.lastBuildPointer=null;if(preview?.ok)return this.addTower(preview.type,preview.cell);return false;}
   cancelBuildPreview(){this.buildPreview=null;this.lastBuildPointer=null;}
 
@@ -69,7 +69,7 @@ export class Game {
     if(Math.hypot(px-28,py-689)<48){this.startWave();return true;}
     if(Math.hypot(px-452,py-689)<48){this.togglePause();return true;}
     const types=this.nativeBuildTypes(),offset=(types.length-1)*40;let best=null,distance=Infinity;for(let i=0;i<types.length;i++){const x=240-offset+i*80,d=Math.hypot(px-x,py-741);if(d<96&&d<distance){best=types[i];distance=d;}}
-    if(best&&this.cash>=best.cost){this.nativeBuildDrag={type:best.type,pointerId:event.pointerId};this.selectedType=null;this.canvas.setPointerCapture?.(event.pointerId);this.setBuildPreview(best.type,event.clientX,event.clientY);}
+    if(best&&this.cash>=best.cost){this.nativeBuildDrag={type:best.type,pointerId:event.pointerId};this.selectedType=null;this.canvas.setPointerCapture?.(event.pointerId);this.setBuildPreview(best.type,event.clientX,event.clientY,event.pointerType);}
     return true;
   }
 
@@ -90,7 +90,7 @@ export class Game {
 
   onPointerMove(event){
     if(this.ended||this.paused)return;
-    if(this.nativeBuildDrag){this.setBuildPreview(this.nativeBuildDrag.type,event.clientX,event.clientY);return;}
+    if(this.nativeBuildDrag){this.setBuildPreview(this.nativeBuildDrag.type,event.clientX,event.clientY,event.pointerType);return;}
     if(!this.nativePointerDown||!this.selectedTower||(!['BLASTER','LASER','MISSILE'].includes(this.selectedTower.type)&&!(this.selectedTower.type==='POP'&&this.selectedTower.level===7)))return;
     const p=this.pointerPosition(event);this.nativeLinkPosition=p;this.nativeLinkTarget=[...this.towers.values()].filter(t=>t!==this.selectedTower&&t.type==='POP'&&t.link!==this.selectedTower&&this.selectedTower.link!==t).sort((a,b)=>{const pa=hexCenter(...a.cell),pb=hexCenter(...b.cell);return Math.hypot(pa.x-p.x,pa.y-p.y)-Math.hypot(pb.x-p.x,pb.y-p.y);}).find(t=>{const at=hexCenter(...t.cell);return Math.hypot(at.x-p.x,at.y-p.y)<37.5;})??null;
   }
