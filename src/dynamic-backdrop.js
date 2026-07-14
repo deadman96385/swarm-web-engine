@@ -55,7 +55,7 @@ class BackdropMeshRenderer {
 
   render(mesh,image){
     if(this.uploadedImage!==image)this.upload(image);
-    const gl=this.gl,data=this.vertexData;for(let i=0;i<mesh.pointCount;i++){const at=i*5,p=i*2;data[at]=mesh.positions[p];data[at+1]=mesh.positions[p+1];data[at+2]=(i%mesh.gridX)*.25;data[at+3]=Math.floor(i/mesh.gridX)*.25;data[at+4]=mesh.brightness[i];}
+    const gl=this.gl,data=this.vertexData,procedural=image===mesh.proceduralTexture,uStep=procedural?mesh.step/image.width:.25,vStep=procedural?mesh.step/image.height:.25;for(let i=0;i<mesh.pointCount;i++){const at=i*5,p=i*2;data[at]=mesh.positions[p];data[at+1]=mesh.positions[p+1];data[at+2]=(i%mesh.gridX)*uStep;data[at+3]=Math.floor(i/mesh.gridX)*vStep;data[at+4]=mesh.brightness[i];}
     gl.viewport(0,0,mesh.width,mesh.height);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.vertexBuffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.DYNAMIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.drawElements(gl.TRIANGLES,mesh.indices.length,gl.UNSIGNED_SHORT,0);gl.flush();return this.canvas;
   }
 }
@@ -76,27 +76,26 @@ export class DynamicBackdrop {
     }
   }
 
-  boomAt(x,y,force,range){
+  boomAt(x,y,force,range,smooth=false){
     const centerX=Math.trunc(x/this.step),centerY=Math.trunc(y/this.step),reach=Math.trunc(range/this.step);let minX=centerX-reach;if(minX>this.gridX-1)return;if(minX<1)minX=1;let maxX=centerX+reach+1;if(maxX<1)return;if(maxX>this.gridX-1)maxX=this.gridX-1;let minY=centerY-reach;if(minY>this.gridY-1)return;if(minY<1)minY=1;let maxY=centerY+reach+1;if(maxY<1)return;if(maxY>this.gridY-1)maxY=this.gridY-1;
-    for(let row=minY;row<maxY;row++)for(let column=minX;column<maxX;column++){const i=row*this.gridX+column,p=i*2,dx=this.positions[p]-x,dy=this.positions[p+1]-y,distance=Math.hypot(dx,dy);if(distance>=range)continue;const impulse=force*(1-distance/range);if(impulse<=0)continue;const nx=distance?dx/distance:0,ny=distance?dy/distance:0;this.positions[p]+=nx*impulse;this.positions[p+1]+=ny*impulse;this.pressures[i]+=impulse;}
+    for(let row=minY;row<maxY;row++)for(let column=minX;column<maxX;column++){const i=row*this.gridX+column,p=i*2,dx=this.positions[p]-x,dy=this.positions[p+1]-y,distance=Math.hypot(dx,dy);if(distance>=range)continue;let falloff=1-distance/range;if(smooth)falloff=falloff*falloff*(3-2*falloff);const impulse=force*falloff;if(impulse<=0)continue;const nx=distance?dx/distance:0,ny=distance?dy/distance:0;this.positions[p]+=nx*impulse;this.positions[p+1]+=ny*impulse;this.pressures[i]+=impulse;}
   }
 
-  // A 256x256 (power-of-two, for gl.REPEAT) seamlessly-tiling nebula, built
-  // once and cached as a stable object so the renderer's identity cache holds.
-  // Summing sine terms with integer spatial frequencies guarantees the tile
-  // wraps without a seam. Serves as both a WebGL texture and a 2D pattern.
+  // A screen-scale, power-of-two replacement for BackdropP1. Its honeycomb
+  // uses the same geometry as the procedural playfield, and because it lives
+  // inside the mesh texture its cells bend and brighten under pressure.
   ensureProceduralTexture(){
     if(this.proceduralTexture!==undefined)return this.proceduralTexture;
-    const size=256,cv=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(size,size):document.createElement('canvas');cv.width=size;cv.height=size;
+    const width=512,height=1024,cv=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(width,height):document.createElement('canvas');cv.width=width;cv.height=height;
     const g=cv.getContext('2d');if(!g){this.proceduralTexture=null;return null;}
-    const img=g.createImageData(size,size),d=img.data,TAU=Math.PI*2;
+    const img=g.createImageData(width,height),d=img.data,TAU=Math.PI*2;
     const terms=[[1,0,0.0,0.50],[0,1,1.3,0.50],[2,3,0.7,0.35],[3,-2,2.1,0.30],[5,4,4.0,0.18],[4,-6,1.1,0.15]];
-    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
-      const u=x/size,v=y/size;let n=0;for(const[a,b,ph,w]of terms)n+=Math.sin(TAU*(a*u+b*v)+ph)*w;
-      const t=Math.max(0,Math.min(1,(n/1.98)*0.5+0.5)),o=(y*size+x)*4;
-      d[o]=Math.round(20+40*t);d[o+1]=Math.round(60+120*t);d[o+2]=Math.round(110+140*t);d[o+3]=255; // dark bluish nebula
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+      const u=x/width,v=y/height;let n=0;for(const[a,b,ph,w]of terms)n+=Math.sin(TAU*(a*u+b*v)+ph)*w;
+      const t=Math.max(0,Math.min(1,(n/1.98)*0.5+0.5)),o=(y*width+x)*4;
+      d[o]=Math.round(2+7*t);d[o+1]=Math.round(9+17*t);d[o+2]=Math.round(20+28*t);d[o+3]=255;
     }
-    g.putImageData(img,0,0);this.proceduralTexture=cv;return cv;
+    g.putImageData(img,0,0);g.save();g.globalCompositeOperation='lighter';g.strokeStyle='rgb(110 225 255)';g.lineWidth=1.25;for(let q=0;8+q*36-24<width;q++)for(let r=0;r<24;r++){const x=8+q*36,y=26+r*44+(q%2===0?22:0);if(y-24>height)break;g.beginPath();for(let i=0;i<6;i++){const angle=Math.PI/3*i,px=x+Math.cos(angle)*24,py=y+Math.sin(angle)*24;i?g.lineTo(px,py):g.moveTo(px,py);}g.closePath();g.stroke();}g.restore();this.proceduralTexture=cv;return cv;
   }
 
   draw(context,image){

@@ -219,12 +219,20 @@ test('BoomAt applies the native doubled count and 1.5 impulse multiplier',()=>{
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{}),creep={x:80,y:70,health:100,maxHealth:100,dead:false,type:'CHOMPER'};game.damageCreep(creep,1);assert.equal(game.particles.length,20);for(const particle of game.particles){assert.ok(Math.abs(Math.hypot(particle.vx,particle.vy)-37.5)<1e-9);assert.equal(particle.life,1);assert.equal(particle.massless,false);}game.destroy();
 });
 
+test('native explosion debris keeps radial tails, a half-life fade, and the shared hue cycle',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{}),creep={x:80,y:70,health:100,maxHealth:100,dead:false,type:'CHOMPER'};game.damageCreep(creep,1);for(const particle of game.particles){assert.equal(particle.lastX,80);assert.equal(particle.lastY,70);assert.equal(particle.fadeOut,.5);assert.equal(particle.size,1);assert.equal(particle.color,'hsl(247 100% 50%)');}game.destroy();
+});
+
 test('dynamic backdrop uses the native 16-pixel spring mesh and pressure decay',()=>{
   const mesh=new DynamicBackdrop(),neighbor=25*mesh.gridX+16,center=25*mesh.gridX+15,boundary=15;
   assert.equal(mesh.gridX,31);assert.equal(mesh.gridY,51);assert.equal(mesh.indices.length,9000);mesh.boomAt(240,400,100,64);
   assert.equal(mesh.positions[neighbor*2],331);assert.equal(mesh.pressures[neighbor],75);assert.equal(mesh.positions[center*2],240);assert.equal(mesh.pressures[center],100);assert.equal(mesh.pressures[boundary],0);
   mesh.update(1/30);assert.ok(Math.abs(mesh.positions[neighbor*2]-325.9333333)<.0001);assert.ok(Math.abs(mesh.velocities[neighbor*2]+76)<.0001);assert.ok(Math.abs(mesh.brightness[neighbor]-.9)<1e-6);assert.equal(mesh.pressures[neighbor],67.5);
   const before=mesh.positions[neighbor*2];mesh.boomAt(240,400,-384,384);assert.equal(mesh.positions[neighbor*2],before);mesh.dispose();
+});
+
+test('procedural backdrop uses a denser mesh and wider smooth impact falloff',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const procedural=new Game(canvasStub(),testLevel(),{}),loaded=new Game(canvasStub(),testLevel(),{backdrop:{}});assert.equal(procedural.backdrop.step,8);assert.equal(procedural.backdrop.gridX,61);assert.equal(procedural.backdrop.gridY,101);assert.equal(loaded.backdrop.step,16);procedural.addBackdropBoom(240,400,10,32);loaded.addBackdropBoom(240,400,10,32);assert.ok(procedural.backdrop.pressures.filter(Boolean).length>loaded.backdrop.pressures.filter(Boolean).length);procedural.destroy();loaded.destroy();
 });
 
 test('massless shot sparkles remain visual while explosion debris feeds Vortex towers',()=>{
