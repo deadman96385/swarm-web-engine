@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node scripts/serve.mjs --open",
     "build": "node scripts/build.mjs",
+    "build-xl-pack": "node scripts/build-xl-pack.mjs",
     "extract-data": "node scripts/extract-data.mjs",
     "test": "node --test",
     "serve": "node scripts/serve.mjs",

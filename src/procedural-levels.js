@@ -4,6 +4,7 @@ import { parseProceduralIdentity } from './level-index.js';
 export const PROCEDURAL_VERSION = 1;
 export const PROCEDURAL_DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
 export const PROCEDURAL_ECONOMIES = ['normal', 'random'];
+export const PROCEDURAL_SIZES = ['standard', 'xl'];
 
 const DIFFICULTY_CODE = { Easy: 'E', Medium: 'M', Hard: 'H' };
 const STANDARD_COSTS = { BLASTER: 6, LASER: 10, MISSILE: 15, SHOCK: 12, THUMP: 14 };
@@ -43,6 +44,30 @@ const CONFIG = {
   }
 };
 
+const XL_CONFIG = {
+  Easy: {
+    grid: { cols: 22, rows: 24 }, spawns: [2, 3], exits: [1, 2], streams: [1, 2], blocked: [20, 36], terrain: [2, 6], roster: [2, 4], waves: [7, 9],
+    groups: [1, 2], count: [5, 9], towers: [3, 4], healthScale: .8, speedScale: .9, openingTowers: 8,
+    allowedCreeps: ['CHOMPER', 'WIGGLE', 'SPINNER', 'STAR'], terrainTypes: ['pass', 'pass', 'fastpass'],
+    healthFactor: [1.4, 1.6], healthFactor2: [0, 0], speedFactor: [1, 1.02], waveDelay: [18, 22], spawnDelay: [.75, 1],
+    normal: { cash: 60, lives: 15, wealth: .7 }, random: { cash: [48, 78], lives: [12, 18], wealth: [.55, .85] }
+  },
+  Medium: {
+    grid: { cols: 22, rows: 24 }, spawns: [3, 5], exits: [2, 3], streams: [2, 3], blocked: [32, 56], terrain: [4, 10], roster: [3, 6], waves: [10, 13],
+    groups: [1, 3], count: [6, 11], towers: [4, 5], healthScale: 1, speedScale: 1, openingTowers: 11,
+    allowedCreeps: ['CHOMPER', 'WIGGLE', 'SPINNER', 'STAR', 'CUBIC', 'PULSAR'], terrainTypes: ['pass', 'pass', 'fastpass', 'healpass'],
+    healthFactor: [1.65, 1.9], healthFactor2: [0, .01], speedFactor: [1, 1.04], waveDelay: [15, 19], spawnDelay: [.55, .8],
+    normal: { cash: 85, lives: 12, wealth: .65 }, random: { cash: [68, 110], lives: [9, 15], wealth: [.5, .8] }
+  },
+  Hard: {
+    grid: { cols: 22, rows: 24 }, spawns: [4, 7], exits: [2, 4], streams: [2, 4], blocked: [48, 80], terrain: [6, 14], roster: [5, 7], waves: [12, 16],
+    groups: [1, 3], count: [7, 14], towers: [4, 5], healthScale: 1.12, speedScale: 1.05, openingTowers: 14,
+    allowedCreeps: ['CHOMPER', 'WIGGLE', 'SPINNER', 'STAR', 'CUBIC', 'PULSAR', 'SWARM'], terrainTypes: ['pass', 'fastpass', 'fastpass', 'healpass', 'healpass'],
+    healthFactor: [1.9, 2.1], healthFactor2: [.01, .03], speedFactor: [1, 1.05], waveDelay: [13, 17], spawnDelay: [.45, .65],
+    normal: { cash: 110, lives: 10, wealth: .6 }, random: { cash: [88, 140], lives: [6, 12], wealth: [.45, .75] }
+  }
+};
+
 function xmur3(value) {
   let h = 1779033703 ^ value.length;
   for (let i = 0; i < value.length; i++) { h = Math.imul(h ^ value.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
@@ -69,8 +94,8 @@ function randomApi(key) {
 const step = (rng, [min, max], amount = 1) => Number((Math.round(rng.float(min, max) / amount) * amount).toFixed(6));
 const esc = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const hex = ([q, r]) => `${q},${r}`;
-const inside = ([q, r]) => q >= 0 && q < 14 && r >= 0 && r < 15;
-const interior = ([q, r]) => q > 0 && q < 13 && r > 0 && r < 14;
+const inside = ([q, r],grid={cols:14,rows:15}) => q >= 0 && q < grid.cols && r >= 0 && r < grid.rows;
+const interior = ([q, r],grid={cols:14,rows:15}) => q > 0 && q < grid.cols-1 && r > 0 && r < grid.rows-1;
 
 export function normalizeProceduralSeed(value) {
   const seed = String(value ?? '').trim().toUpperCase();
@@ -96,64 +121,71 @@ function uniqueSeeds(seedFactory, existing = []) {
 }
 
 export function normalizeProceduralState(value, seedFactory = createProceduralSeed) {
-  const state = { version: 1, economyMode: PROCEDURAL_ECONOMIES.includes(value?.economyMode) ? value.economyMode : 'normal', sets: {} };
+  const state = { version: 2, economyMode: PROCEDURAL_ECONOMIES.includes(value?.economyMode) ? value.economyMode : 'normal', size: PROCEDURAL_SIZES.includes(value?.size) ? value.size : 'standard', sets: {} };
   for (const mode of PROCEDURAL_ECONOMIES) {
     state.sets[mode] = {};
-    for (const difficulty of PROCEDURAL_DIFFICULTIES) state.sets[mode][difficulty] = uniqueSeeds(seedFactory, value?.version === 1 ? value?.sets?.[mode]?.[difficulty] : []);
+    for (const size of PROCEDURAL_SIZES) {
+      state.sets[mode][size] = {};
+      for (const difficulty of PROCEDURAL_DIFFICULTIES) {
+        const existing=value?.version===2?value?.sets?.[mode]?.[size]?.[difficulty]:size==='standard'&&value?.version===1?value?.sets?.[mode]?.[difficulty]:[];
+        state.sets[mode][size][difficulty] = uniqueSeeds(seedFactory, existing);
+      }
+    }
   }
   return state;
 }
 
-export function proceduralSourceName({ seed, difficulty, economyMode }) {
+export function proceduralSourceName({ seed, difficulty, economyMode, size='standard' }) {
   const normalized = normalizeProceduralSeed(seed);
   if (!DIFFICULTY_CODE[difficulty]) throw new Error(`Unknown procedural difficulty: ${difficulty}`);
   if (!PROCEDURAL_ECONOMIES.includes(economyMode)) throw new Error(`Unknown procedural economy: ${economyMode}`);
-  return `Procedural/v${PROCEDURAL_VERSION}/GAME_LEVEL_PROC_${DIFFICULTY_CODE[difficulty]}_${economyMode.toUpperCase()}_${normalized}.xml`;
+  if (!PROCEDURAL_SIZES.includes(size)) throw new Error(`Unknown procedural size: ${size}`);
+  return `Procedural/v${PROCEDURAL_VERSION}/GAME_LEVEL_PROC_${size==='xl'?'XL_':''}${DIFFICULTY_CODE[difficulty]}_${economyMode.toUpperCase()}_${normalized}.xml`;
 }
 
-function boundaryCells(side) {
-  if (side === 'left') return Array.from({ length: 11 }, (_, i) => [0, i + 2]);
-  if (side === 'right') return Array.from({ length: 11 }, (_, i) => [13, i + 2]);
-  if (side === 'top') return Array.from({ length: 10 }, (_, i) => [i + 2, 0]);
-  return Array.from({ length: 10 }, (_, i) => [i + 2, 14]);
+function boundaryCells(side,grid={cols:14,rows:15}) {
+  if (side === 'left') return Array.from({ length: grid.rows-4 }, (_, i) => [0, i + 2]);
+  if (side === 'right') return Array.from({ length: grid.rows-4 }, (_, i) => [grid.cols-1, i + 2]);
+  if (side === 'top') return Array.from({ length: grid.cols-4 }, (_, i) => [i + 2, 0]);
+  return Array.from({ length: grid.cols-4 }, (_, i) => [i + 2, grid.rows-1]);
 }
 
-function endpoints(rng, config) {
+function endpoints(rng, config,grid={cols:14,rows:15}) {
   const horizontal = rng.chance(.5), first = horizontal ? (rng.chance(.5) ? 'left' : 'right') : (rng.chance(.5) ? 'top' : 'bottom');
   const opposite = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' }[first];
   const spawnCount = rng.int(...config.spawns), exitCount = Math.min(spawnCount, rng.int(...config.exits));
-  const spawnCells = rng.shuffle(boundaryCells(first)).slice(0, spawnCount), exitCells = rng.shuffle(boundaryCells(opposite)).slice(0, exitCount);
+  const spawnCells = rng.shuffle(boundaryCells(first,grid)).slice(0, spawnCount), exitCells = rng.shuffle(boundaryCells(opposite,grid)).slice(0, exitCount);
   const exits = exitCells.map((cell, i) => ({ name: `e${i + 1}`, hex: cell }));
   const spawns = spawnCells.map((cell, i) => ({ name: `s${i + 1}`, hex: cell, exit: exits[i % exits.length].name }));
   return { exits, spawns };
 }
 
-function randomBlocked(rng, target) {
+function randomBlocked(rng, target,grid={cols:14,rows:15}) {
   const blocked = new Set();
   for (let guard = 0; blocked.size < target && guard < target * 20; guard++) {
-    let cell = [rng.int(1, 12), rng.int(1, 13)], direction = rng.pick(neighbors(...cell).map(next => [next[0] - cell[0], next[1] - cell[1]]));
-    const length = rng.int(2, 6);
+    let cell = [rng.int(1, grid.cols-2), rng.int(1, grid.rows-2)], direction = rng.pick(neighbors(...cell).map(next => [next[0] - cell[0], next[1] - cell[1]]));
+    const length = rng.int(2, grid.cols>14?8:6);
     for (let i = 0; i < length && blocked.size < target; i++) {
-      if (interior(cell)) blocked.add(cellKey(...cell));
-      if (rng.chance(.25)) { const next = rng.pick(neighbors(...cell).filter(interior)); direction = [next[0] - cell[0], next[1] - cell[1]]; }
+      if (interior(cell,grid)) blocked.add(cellKey(...cell));
+      if (rng.chance(.25)) { const next = rng.pick(neighbors(...cell).filter(next=>interior(next,grid))); direction = [next[0] - cell[0], next[1] - cell[1]]; }
       const next = [cell[0] + direction[0], cell[1] + direction[1]];
-      if (!interior(next)) break;
+      if (!interior(next,grid)) break;
       cell = next;
     }
   }
   return [...blocked].map(key => key.split(',').map(Number));
 }
 
-function fallbackBlocked(target) {
+function fallbackBlocked(target,grid={cols:14,rows:15}) {
   const cells = [];
-  for (const q of [3, 5, 7, 9, 11]) for (const r of [3, 5, 7, 9, 11]) cells.push([q, r]);
+  for (let q=3;q<grid.cols-2;q+=2) for (let r=3;r<grid.rows-2;r+=2) cells.push([q, r]);
   return cells.slice(0, target);
 }
 
-function terrain(rng, config, blocked) {
+function terrain(rng, config, blocked,grid={cols:14,rows:15}) {
   const target = rng.int(...config.terrain), blockedKeys = new Set(blocked.map(cell => cellKey(...cell)));
   const candidates = [];
-  for (let q = 1; q <= 12; q++) for (let r = 1; r <= 13; r++) if (!blockedKeys.has(cellKey(q, r))) candidates.push([q, r]);
+  for (let q = 1; q < grid.cols-1; q++) for (let r = 1; r < grid.rows-1; r++) if (!blockedKeys.has(cellKey(q, r))) candidates.push([q, r]);
   const out = { pass: [], fast: [], heal: [] };
   for (const cell of rng.shuffle(candidates).slice(0, target)) {
     const type = rng.pick(config.terrainTypes);
@@ -183,6 +215,13 @@ function waveGroups(rng, config, roster, apparentIndex) {
 
 function waves(rng, config, roster, spawns) {
   const result = [], count = rng.int(...config.waves);
+  if(config.streams){
+    for(let i=0;i<count;i++){
+      const main=spawns[i<spawns.length?i:rng.int(0,spawns.length-1)],streamCount=Math.min(spawns.length,rng.int(...config.streams)),chosen=[main,...rng.shuffle(spawns.filter(spawn=>spawn!==main)).slice(0,streamCount-1)];
+      for(let stream=0;stream<chosen.length;stream++)result.push({spawn:chosen[stream].name,concurrent:stream<chosen.length-1,groups:waveGroups(rng,config,roster,i)});
+    }
+    return result;
+  }
   for (let i = 0; i < count; i++) {
     const mainSpawn = spawns[i < spawns.length ? i : rng.int(0, spawns.length - 1)].name;
     if (spawns.length > 1 && rng.chance(config.concurrentChance)) {
@@ -194,18 +233,18 @@ function waves(rng, config, roster, spawns) {
   return result;
 }
 
-function buildSpec(rng, difficulty, economyMode, seed, missionName, useFallback = false) {
-  const config = CONFIG[difficulty], { exits, spawns } = endpoints(rng, config);
-  const blocked = useFallback ? fallbackBlocked(config.blocked[0]) : randomBlocked(rng, rng.int(...config.blocked));
-  const special = terrain(rng, config, blocked), roster = creepRoster(rng, config), towerList = towers(rng, config, economyMode);
+function buildSpec(rng, difficulty, economyMode, seed, missionName, useFallback = false,size='standard') {
+  const config = (size==='xl'?XL_CONFIG:CONFIG)[difficulty],grid=config.grid??{cols:14,rows:15}, { exits, spawns } = endpoints(rng, config,grid);
+  const blocked = useFallback ? fallbackBlocked(config.blocked[0],grid) : randomBlocked(rng, rng.int(...config.blocked),grid);
+  const special = terrain(rng, config, blocked,grid), roster = creepRoster(rng, config), towerList = towers(rng, config, economyMode);
   const econ = economyMode === 'normal'
-    ? { ...config.normal, wealth: 1 }
+    ? { ...config.normal, wealth: config.normal.wealth??1 }
     : { cash: rng.int(...config.random.cash), lives: rng.int(...config.random.lives), wealth: step(rng, config.random.wealth, .05) };
-  econ.cash = Math.max(econ.cash, Math.min(...towerList.map(tower => tower.cost)) * 5);
+  econ.cash = Math.max(econ.cash, Math.min(...towerList.map(tower => tower.cost)) * (config.openingTowers??5));
   const waveList = waves(rng, config, roster, spawns), terrainCount = special.pass.length + special.fast.length + special.heal.length;
   return {
-    id: parseInt(seed, 16), seed, name: missionName, cash: econ.cash, lives: econ.lives,
-    description: `${spawns.length} entrance${spawns.length === 1 ? '' : 's'} · ${waveList.filter(wave => !wave.concurrent).length} waves · ${terrainCount} terrain hex${terrainCount === 1 ? '' : 'es'} · ${economyMode === 'normal' ? 'Normal' : 'Random'} economy.`,
+    id: parseInt(seed, 16), seed, name: missionName, cash: econ.cash, lives: econ.lives, grid, size,
+    description: size==='xl'?`XL 22×24 · ${spawns.length} entrance${spawns.length === 1 ? '' : 's'} · ${exits.length} exit${exits.length===1?'':'s'} · ${waveList.filter(wave => !wave.concurrent).length} waves · ${terrainCount} terrain hex${terrainCount === 1 ? '' : 'es'} · ${economyMode === 'normal' ? 'Normal' : 'Random'} economy.`:`${spawns.length} entrance${spawns.length === 1 ? '' : 's'} · ${waveList.filter(wave => !wave.concurrent).length} waves · ${terrainCount} terrain hex${terrainCount === 1 ? '' : 'es'} · ${economyMode === 'normal' ? 'Normal' : 'Random'} economy.`,
     exits, spawns, blocked, ...special, roster, waves: waveList, towers: towerList,
     waveHealthFactor: step(rng, config.healthFactor, .05), waveHealthFactor2: step(rng, config.healthFactor2, .01),
     waveSpeedFactor: step(rng, config.speedFactor, .01), waveWealthFactor: econ.wealth,
@@ -214,7 +253,7 @@ function buildSpec(rng, difficulty, economyMode, seed, missionName, useFallback 
 }
 
 function levelXml(spec) {
-  const lines = ['<?xml version="1.0"?>', '<gameLevel>', `\t<info name="${esc(spec.name)}" id="${spec.id}" initCash="${spec.cash}" initLives="${spec.lives}" description="${esc(spec.description)}" />`, '<hexmap>'];
+  const lines = ['<?xml version="1.0"?>', '<gameLevel>', `\t<info name="${esc(spec.name)}" id="${spec.id}" initCash="${spec.cash}" initLives="${spec.lives}" description="${esc(spec.description)}" />`, spec.size==='xl'?`<hexmap cols="${spec.grid.cols}" rows="${spec.grid.rows}">`:'<hexmap>'];
   for (const exit of spec.exits) lines.push(`\t<exithex name="${exit.name}" hex="${hex(exit.hex)}"/>`);
   for (const spawn of spec.spawns) lines.push(`\t<spawnhex name="${spawn.name}" hex="${hex(spawn.hex)}" exit="${spawn.exit}"/>`);
   for (const cell of spec.blocked) lines.push(`\t<specialhex type="blocked" hex="${hex(cell)}"/>`);
@@ -236,18 +275,19 @@ function levelXml(spec) {
 }
 
 export function validateProceduralLevel(level) {
-  const problems = [], spawnNames = new Set(level.spawns.map(spawn => spawn.name)), creepTypes = new Set(Object.keys(level.creeps));
+  const grid=level.grid??{cols:14,rows:15},config=(level.xl?XL_CONFIG:CONFIG)[level.difficulty],minRoute=level.xl?14:8,minBuildable=level.xl?260:80,problems = [], spawnNames = new Set(level.spawns.map(spawn => spawn.name)), creepTypes = new Set(Object.keys(level.creeps));
   for (const spawn of level.spawns) {
-    const route = findPath(spawn.cell, spawn.exit, level.blocked);
-    if (!route || route.length < 8) problems.push(`invalid route from ${spawn.name}`);
-    const ingress = neighbors(...spawn.cell).filter(cell => inside(cell) && !level.blocked.has(cellKey(...cell)));
+    const route = findPath(spawn.cell, spawn.exit, level.blocked,grid);
+    if (!route || route.length < minRoute) problems.push(`invalid route from ${spawn.name}`);
+    const ingress = neighbors(...spawn.cell).filter(cell => inside(cell,grid) && !level.blocked.has(cellKey(...cell)));
     if (ingress.length < 2) problems.push(`sealed ingress at ${spawn.name}`);
   }
-  const buildable = Array.from({ length: 12 * 13 }, (_, index) => [1 + Math.floor(index / 13), 1 + index % 13])
+  const interiorRows=grid.rows-2,buildable = Array.from({ length: (grid.cols-2)*interiorRows }, (_, index) => [1 + Math.floor(index / interiorRows), 1 + index % interiorRows])
     .filter(cell => !level.blocked.has(cellKey(...cell)) && !level.pass.has(cellKey(...cell))).length;
-  if (buildable < 80) problems.push(`only ${buildable} buildable interior cells`);
+  if (buildable < minBuildable) problems.push(`only ${buildable} buildable interior cells`);
   if (!level.towers.some(tower => tower.type === 'BLASTER')) problems.push('Blaster is not available');
-  if (!level.towers.some(tower => tower.cost * 5 <= level.cash)) problems.push('starting cash cannot buy five cheapest towers');
+  if (!level.towers.some(tower => tower.cost * (config.openingTowers??5) <= level.cash)) problems.push(`starting cash cannot buy ${config.openingTowers??5} cheapest towers`);
+  if(level.xl){const assigned=new Set(level.spawns.map(spawn=>spawn.exitName));for(const name of level.exits.keys())if(!assigned.has(name))problems.push(`exit ${name} has no entrance`);}
   const usedSpawns = new Set();
   for (const wave of level.waves) {
     if (!spawnNames.has(wave.spawnName)) problems.push(`unknown wave spawn ${wave.spawnName}`); else usedSpawns.add(wave.spawnName);
@@ -258,14 +298,16 @@ export function validateProceduralLevel(level) {
   return problems;
 }
 
-export function generateProceduralEntry({ seed, difficulty, economyMode }) {
+export function generateProceduralEntry({ seed, difficulty, economyMode, size='standard' }) {
   seed = normalizeProceduralSeed(seed);
-  if (!CONFIG[difficulty]) throw new Error(`Unknown procedural difficulty: ${difficulty}`);
+  const configs=size==='xl'?XL_CONFIG:CONFIG;
+  if (!configs[difficulty]) throw new Error(`Unknown procedural difficulty: ${difficulty}`);
   if (!PROCEDURAL_ECONOMIES.includes(economyMode)) throw new Error(`Unknown procedural economy: ${economyMode}`);
-  const sourceName = proceduralSourceName({ seed, difficulty, economyMode }), key = `v${PROCEDURAL_VERSION}|${difficulty}|${economyMode}|${seed}`, rng = randomApi(key), nameRng = randomApi(`name|${key}`);
+  if (!PROCEDURAL_SIZES.includes(size)) throw new Error(`Unknown procedural size: ${size}`);
+  const sourceName = proceduralSourceName({ seed, difficulty, economyMode,size }), key = size==='standard'?`v${PROCEDURAL_VERSION}|${difficulty}|${economyMode}|${seed}`:`v${PROCEDURAL_VERSION}|xl|${difficulty}|${economyMode}|${seed}`, rng = randomApi(key), nameRng = randomApi(`name|${key}`);
   const missionName = `${nameRng.pick(NAME_ADJECTIVES)} ${nameRng.pick(NAME_NOUNS)}`;
   for (let attempt = 0; attempt <= 200; attempt++) {
-    const spec = buildSpec(rng, difficulty, economyMode, seed, missionName, attempt === 200), xml = levelXml(spec);
+    const spec = buildSpec(rng, difficulty, economyMode, seed, missionName, attempt === 200,size), xml = levelXml(spec);
     const level = parseLevel(xml, sourceName, difficulty, 'procedural'), problems = validateProceduralLevel(level);
     if (!problems.length) return { sourceName, xml };
   }
@@ -279,3 +321,4 @@ export function entryFromProceduralSourceName(sourceName) {
 }
 
 export const PROCEDURAL_CONFIG = CONFIG;
+export const PROCEDURAL_XL_CONFIG = XL_CONFIG;

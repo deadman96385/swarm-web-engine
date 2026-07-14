@@ -13,6 +13,8 @@ import {
   PROCEDURAL_CONFIG,
   PROCEDURAL_DIFFICULTIES,
   PROCEDURAL_ECONOMIES,
+  PROCEDURAL_SIZES,
+  PROCEDURAL_XL_CONFIG,
   validateProceduralLevel
 } from '../src/procedural-levels.js';
 
@@ -25,7 +27,7 @@ test('procedural generation is deterministic and its source name is replayable',
   assert.deepEqual(first, second);
   assert.equal(classifyName(first.sourceName), 'procedural');
   assert.deepEqual(entryFromProceduralSourceName(first.sourceName), first);
-  assert.deepEqual(parseProceduralIdentity(first.sourceName), { version: 1, difficulty: 'Medium', economyMode: 'random', seed: '12AB34CD' });
+  assert.deepEqual(parseProceduralIdentity(first.sourceName), { version: 1, size: 'standard', difficulty: 'Medium', economyMode: 'random', seed: '12AB34CD' });
   assert.match(parsed(options).name, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
   assert.doesNotMatch(parsed(options).name, /12AB34CD|Generated Swarm/);
   assert.notEqual(generateProceduralEntry({ ...options, seed: '12AB34CE' }).xml, first.xml);
@@ -37,12 +39,22 @@ test('seed input and stored four-card sets normalize safely', () => {
   let next = 0;
   const state = normalizeProceduralState({ version: 1, economyMode: 'random', sets: { random: { Easy: ['AAAAAAAA', 'AAAAAAAA', 'bad'] } } }, () => (++next).toString(16).padStart(8, '0'));
   assert.equal(state.economyMode, 'random');
-  for (const mode of PROCEDURAL_ECONOMIES) for (const difficulty of PROCEDURAL_DIFFICULTIES) {
-    assert.equal(state.sets[mode][difficulty].length, 4);
-    assert.equal(new Set(state.sets[mode][difficulty]).size, 4);
-    assert.ok(state.sets[mode][difficulty].every(seed => /^[0-9A-F]{8}$/.test(seed)));
+  assert.equal(state.version,2);assert.equal(state.size,'standard');
+  for (const mode of PROCEDURAL_ECONOMIES) for (const size of PROCEDURAL_SIZES) for (const difficulty of PROCEDURAL_DIFFICULTIES) {
+    assert.equal(state.sets[mode][size][difficulty].length, 4);
+    assert.equal(new Set(state.sets[mode][size][difficulty]).size, 4);
+    assert.ok(state.sets[mode][size][difficulty].every(seed => /^[0-9A-F]{8}$/.test(seed)));
   }
-  assert.equal(state.sets.random.Easy[0], 'AAAAAAAA');
+  assert.equal(state.sets.random.standard.Easy[0], 'AAAAAAAA');
+});
+
+test('XL procedural identities, economies, and concurrent chains are replayable',()=>{
+  const expected={Easy:{cash:60,lives:15,wealth:.7},Medium:{cash:85,lives:12,wealth:.65},Hard:{cash:110,lives:10,wealth:.6}};
+  for(const difficulty of PROCEDURAL_DIFFICULTIES){const options={seed:'12AB34CD',difficulty,economyMode:'normal',size:'xl'},entry=generateProceduralEntry(options),level=parsed(options),identity=parseProceduralIdentity(entry.sourceName);assert.equal(identity.size,'xl');assert.deepEqual(entryFromProceduralSourceName(entry.sourceName),entry);assert.deepEqual(level.grid,{cols:22,rows:24});assert.equal(level.xl,true);assert.equal(level.cash,expected[difficulty].cash);assert.equal(level.lives,expected[difficulty].lives);assert.equal(level.waveWealthFactor,expected[difficulty].wealth);assert.ok(level.waves.length>=level.apparentWaves);if(difficulty!=='Easy')assert.ok(level.waves.length>level.apparentWaves);}
+});
+
+test('a deterministic XL seed corpus satisfies large-grid route and economy guards',()=>{
+  for(const difficulty of PROCEDURAL_DIFFICULTIES)for(const economyMode of PROCEDURAL_ECONOMIES){const config=PROCEDURAL_XL_CONFIG[difficulty];for(let index=0;index<20;index++){const seed=seedAt(index),level=parsed({seed,difficulty,economyMode,size:'xl'});assert.deepEqual(validateProceduralLevel(level),[],`${difficulty}/${economyMode}/${seed}`);assert.ok(level.spawns.length>=config.spawns[0]&&level.spawns.length<=config.spawns[1]);assert.ok(level.exits.size>=config.exits[0]&&level.exits.size<=config.exits[1]);assert.ok(level.towers.some(t=>t.cost*config.openingTowers<=level.cash));for(const spawn of level.spawns)assert.ok(findPath(spawn.cell,spawn.exit,level.blocked,level.grid)?.length>=14);}}
 });
 
 test('Normal Economy uses the documented fixed cash, lives, prices, and wealth', () => {

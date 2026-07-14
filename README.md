@@ -54,8 +54,9 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 
 ### Content
 - **30 missions** — the 10 Easy, 10 Medium, and 10 Hard designs from the WP archive, with original maps, tutorials, entrances/exits, blocked/fast-pass/heal-pass/pass-through cells, pre-placed towers, per-mission economy and lives, creep rosters, wave banks, and tower availability.
+- **Swarm XL** — twelve curated 22×24 missions (four per difficulty) that reinterpret classic Swarm concepts across several fixed entrance→exit lanes. XL adds a pan/zoom camera, minimap, paired lane markers, multi-chain waves, and its own economy curve.
 - **LHC // Breach Grid** — a bundled 12-mission security-themed fan expansion with four authored and engine-validated missions per difficulty.
-- **Procedural Swarm** — four deterministic seeded missions per difficulty in Normal or Random Economy mode. Maps, terrain, waves, rosters, and tower availability are regenerated from the visible seed and validated with the engine's real parser and pathfinder before play.
+- **Procedural Swarm** — four deterministic seeded missions per difficulty, board size (Standard or XL), and Normal/Random Economy mode. Maps, terrain, waves, rosters, and tower availability are regenerated from the visible seed and validated with the engine's real parser and pathfinder before play.
 - **iOS Level Pack 1** — when the `.ipa` is supplied, the five iOS-exclusive bonus missions (*Lesser Evil*, *Jellyfish*, *Stripes*, *Chromasome*, *The Groove*) load from it and appear under a dedicated **Level Pack 1** menu section. They are scored on the local leaderboard but kept out of the base Easy/Medium/Hard achievement counts.
 - **Original geoDefense campaign** — the `.ipa` also carries 34 complete levels (9 Easy, 12 Medium, 13 Hard) from the original *geoDefense* that the shipping Swarm app never loads. Supply the `.ipa` and they appear under an **Original geoDefense** menu section with their own Easy/Medium/Hard tabs. Unlike the Swarm maze, these use fixed creep paths (`<creepPath>` polylines): creeps stream along a drawn route and you build on the surrounding hexes — you can't build on the path, and Vortex is buildable. Scores go to the local leaderboard but, like Level Pack 1, are kept out of the Swarm achievement counts.
 - **Endless missions** — authored wave banks cycle and the native score-on-survival ending is preserved.
@@ -75,6 +76,7 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 - **Novice** and native **Hardcore** modes (Hardcore is the fresh-install default), with the 125%-of-`initCash` Novice economy, 75% Novice creep health, and the 5,000 cash cap.
 - Native integer-truncated wave health (`waveHealthFactor` and quadratic `waveHealthFactor2`), linear speed and kill-wealth formulas, independent overlapping wave timers, and the 25%-timer early-launch gate.
 - Native distance-to-exit **score multiplier** bonuses (×5/×10/×20/×50 close-call thresholds).
+- XL economy baselines fund several opening fronts while reduced kill-wealth growth prevents simultaneous chains from producing runaway cash; tower prices, upgrades, ranges, resale, and the 5,000 cap remain unchanged.
 
 ### Screens and flow
 - Boots straight to the **main menu** (Easy/Medium/Hard, Level Pack 1, Original geoDefense, Leaderboards, Achievements, Help &amp; Options, Continue) → **level select** → **pre-game** (leaderboard + high score) → **tutorial** (a generated "Mission Briefing" card built from the bundled localized text, or the original screenshot art when an archive is loaded) → **gameplay**.
@@ -87,6 +89,7 @@ The engine reproduces the full **game** — every screen, tower, creep, mode, an
 
 ### Input and rendering
 - Touch, mouse, and pointer input; tap-to-select, drag-to-build from the tower bar, drag-to-link, and double-tap Laser lock. Responsive layout around the native 480×800 surface, with an optional collapsible desktop control sidebar.
+- XL boards support empty-space drag panning, cursor-anchored wheel zoom, two-finger pinch/pan, transformed drag-to-build placement, a live minimap, and one-tap fit-to-board without moving the native score/build bars.
 - Additive sprite blending, touch/range indicators (Glow/Star/Flare/Ring frames with random-rotation and fade variants), drag-driven honeycomb brightness, floating multiplier text, doubled `BoomAt` particle counts, 1.5× explosion impulse, and the 31×51 spring-mesh dynamic backdrop (WebGL, with a tiled fallback). Every original sprite has a procedural vector fallback — per-type creep shapes, oriented tower turrets, the honeycomb grid, range rings, and Vortex/Thump shockwaves — so with no archive loaded the game renders entirely from code, and the backdrop mesh runs on a generated tiling texture.
 - **Audio** is SFX-only, matching the original (no music): shots, pops, menu clicks, and the countdown are synthesized in the Web Audio API at boot — zero audio files. The low-life countdown (10→1) is spoken by a small **formant speech synthesizer** for the original's robotic "female computer" voice, identical on every device. Loading the `.ipa` replaces the synth bank with the original WAVs.
 

@@ -17,6 +17,15 @@ export function killCash(wave,factor){return Math.trunc(1+(wave-1)*factor);}
 export function cellKey(q, r) { return `${q},${r}`; }
 export function parseCell(value) { return value.split(',').map(Number); }
 export function hexCenter(q, r) { return { x:8 + q * 36, y:26 + r * 44 + (q % 2 === 0 ? 22 : 0) }; }
+export const DEFAULT_GRID = Object.freeze({ cols:14, rows:15 });
+export function normalizeGrid(gridOrCols=DEFAULT_GRID,rows=null){
+  if(typeof gridOrCols==='number')return {cols:gridOrCols,rows:rows??DEFAULT_GRID.rows};
+  return {cols:Number(gridOrCols?.cols??DEFAULT_GRID.cols),rows:Number(gridOrCols?.rows??DEFAULT_GRID.rows)};
+}
+export function gridWorldBounds(grid=DEFAULT_GRID){
+  const {cols,rows}=normalizeGrid(grid),last=hexCenter(Math.max(0,cols-1),Math.max(0,rows-1)),bottom=hexCenter(0,Math.max(0,rows-1));
+  return {minX:0,minY:0,maxX:last.x+24,maxY:bottom.y+24,width:last.x+24,height:bottom.y+24};
+}
 
 // The original geoDefense fixed-path levels are authored in the iPhone 320x480
 // portrait space. Map that logical area into the web engine's 480x800 play
@@ -41,7 +50,8 @@ export function pathBlockedHexes(path, cols = 14, rows = 15, radius = 24) {
   }
   return blocked;
 }
-export function pixelToHex(x, y, cols=14, rows=15) {
+export function pixelToHex(x, y, gridOrCols=DEFAULT_GRID, legacyRows=null) {
+  const {cols,rows}=normalizeGrid(gridOrCols,legacyRows);
   let best=null, distance=Infinity;
   for(let q=0;q<cols;q++) for(let r=0;r<rows;r++) {
     const p=hexCenter(q,r), d=(p.x-x)**2+(p.y-y)**2;
@@ -64,7 +74,8 @@ function mangoSort(array,left,right,compare,depth=32){
   }while(left<right);
 }
 
-export function findNextCell(start,goal,blocked,cols=14,rows=15){
+export function findNextCell(start,goal,blocked,gridOrCols=DEFAULT_GRID,legacyRows=null){
+  const {cols,rows}=normalizeGrid(gridOrCols,legacyRows);
   if(cellKey(...start)===cellKey(...goal))return null;
   const records=new Map();for(let q=0;q<cols;q++)for(let r=0;r<rows;r++)records.set(cellKey(q,r),{cell:[q,r],cost:0,parent:null,opened:false,closed:false});
   const startRecord=records.get(cellKey(...start)),goalRecord=records.get(cellKey(...goal));if(!startRecord||!goalRecord)return null;startRecord.opened=true;startRecord.closed=true;const open=[startRecord];let count=1;
@@ -74,8 +85,8 @@ export function findNextCell(start,goal,blocked,cols=14,rows=15){
   return null;
 }
 
-export function findPath(start, goal, blocked, cols=14, rows=15) {
-  const path=[[...start]],seen=new Set([cellKey(...start)]);let current=[...start];while(cellKey(...current)!==cellKey(...goal)){const next=findNextCell(current,goal,blocked,cols,rows);if(!next||seen.has(cellKey(...next)))return null;path.push(next);seen.add(cellKey(...next));current=next;}return path;
+export function findPath(start, goal, blocked, gridOrCols=DEFAULT_GRID, legacyRows=null) {
+  const grid=normalizeGrid(gridOrCols,legacyRows),path=[[...start]],seen=new Set([cellKey(...start)]);let current=[...start];while(cellKey(...current)!==cellKey(...goal)){const next=findNextCell(current,goal,blocked,grid);if(!next||seen.has(cellKey(...next)))return null;path.push(next);seen.add(cellKey(...next));current=next;}return path;
 }
 
 export function parseLevel(xml, sourceName='', difficulty=null, campaign='swarm') {
@@ -83,18 +94,24 @@ export function parseLevel(xml, sourceName='', difficulty=null, campaign='swarm'
   if(doc.querySelector('parsererror')) throw new Error(`Invalid level XML: ${sourceName}`);
   const attr=(el,name,fallback='')=>el?.getAttribute(name)??fallback;
   const info=doc.querySelector('info');
+  const hexmap=doc.querySelector('hexmap');
+  const grid=normalizeGrid({cols:Number(attr(hexmap,'cols',DEFAULT_GRID.cols)),rows:Number(attr(hexmap,'rows',DEFAULT_GRID.rows))});
+  if(!Number.isInteger(grid.cols)||!Number.isInteger(grid.rows)||grid.cols<3||grid.rows<3)throw new Error(`Invalid grid dimensions: ${sourceName}`);
   const pathEl=doc.querySelector('creepPath');
   const path=pathEl?[...pathEl.querySelectorAll('point')].map(p=>scalePathPoint(Number(attr(p,'x','0')),Number(attr(p,'y','0')))):null;
   const pathMode=!!(path&&path.length>1);
-  const pathBlocked=pathMode?pathBlockedHexes(path):null;
+  const pathBlocked=pathMode?pathBlockedHexes(path,grid.cols,grid.rows):null;
   const spawns=[...doc.querySelectorAll('spawnhex')].map(el=>({name:attr(el,'name'),cell:parseCell(attr(el,'hex')),exitName:attr(el,'exit')}));
   const exits=new Map([...doc.querySelectorAll('exithex')].map(el=>[attr(el,'name'),parseCell(attr(el,'hex'))]));
+  const exitLanes=new Map([...exits.keys()].map((name,index)=>[name,index]));
   const creepRoot=doc.querySelector('creeps'), waveRoot=doc.querySelector('creepWaves');
   const specials=[...doc.querySelectorAll('specialhex')].map(el=>({type:attr(el,'type'),hex:attr(el,'hex')}));
   const waves=[...doc.querySelectorAll('creepWaves > wave')].map(el=>({spawnName:attr(el,'spawnHex',spawns[0]?.name),concurrent:attr(el,'concurrent','false').toLowerCase()==='true',groups:[...el.querySelectorAll('spawn')].map(s=>({type:attr(s,'type'),count:Number(attr(s,'count','1'))}))}));
-  const overrides=new Set([...specials.map(s=>s.hex),...spawns.map(s=>cellKey(...s.cell)),...exits.values()].map(v=>Array.isArray(v)?cellKey(...v):v)),boundary=[];for(let q=0;q<14;q++)for(let r=0;r<15;r++)if((q===0||q===13||r===0||r===14)&&!overrides.has(cellKey(q,r)))boundary.push(cellKey(q,r));
+  const inside=cell=>cell[0]>=0&&cell[1]>=0&&cell[0]<grid.cols&&cell[1]<grid.rows;
+  for(const endpoint of [...spawns.map(s=>s.cell),...exits.values()])if(!inside(endpoint))throw new Error(`Endpoint outside ${grid.cols}x${grid.rows} grid: ${sourceName}`);
+  const overrides=new Set([...specials.map(s=>s.hex),...spawns.map(s=>cellKey(...s.cell)),...exits.values()].map(v=>Array.isArray(v)?cellKey(...v):v)),boundary=[];for(let q=0;q<grid.cols;q++)for(let r=0;r<grid.rows;r++)if((q===0||q===grid.cols-1||r===0||r===grid.rows-1)&&!overrides.has(cellKey(q,r)))boundary.push(cellKey(q,r));
   return {
-    sourceName, campaign,
+    sourceName, campaign, grid, xl:grid.cols!==DEFAULT_GRID.cols||grid.rows!==DEFAULT_GRID.rows,
     difficulty: difficulty ?? (/_E_/.test(sourceName)?'Easy':/_M_/.test(sourceName)?'Medium':'Hard'),
     name:attr(info,'name','Untitled swarm'), id:Number(attr(info,'id','0')),
     cash:Number(attr(info,'initCash','0')), lives:Number(attr(info,'initLives','10')),
@@ -105,7 +122,7 @@ export function parseLevel(xml, sourceName='', difficulty=null, campaign='swarm'
     fast:new Set(specials.filter(s=>s.type==='fastpass').map(s=>s.hex)),
     heal:new Set(specials.filter(s=>s.type==='healpass').map(s=>s.hex)),
     placed:[...doc.querySelectorAll('placetower')].map(el=>({type:attr(el,'type'),cell:parseCell(attr(el,'hex'))})),
-    spawns:spawns.map(s=>({...s,exit:exits.get(s.exitName)??[13,7]})), exits,
+    spawns:spawns.map(s=>({...s,laneIndex:exitLanes.get(s.exitName)??0,exit:exits.get(s.exitName)??[grid.cols-1,Math.floor(grid.rows/2)]})), exits, exitLanes,
     creeps:Object.fromEntries([...doc.querySelectorAll('creeps > creep')].map(el=>[attr(el,'type'),{speed:Number(attr(el,'speed','30')),health:Number(attr(el,'health','50'))}])),
     waveHealthFactor:Number(attr(creepRoot,'waveHealthFactor','1.25')),
     waveHealthFactor2:Number(attr(creepRoot,'waveHealthFactor2','0')),

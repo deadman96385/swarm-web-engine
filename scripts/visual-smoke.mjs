@@ -27,10 +27,27 @@ try{
   if(existsSync(xap)){await browser('upload','#archiveInput',...(existsSync(ipa)?[xap,ipa]:[xap]));await browser('wait','#mainMenuScreen');}
   await browser('screenshot',resolve(output,'01-main-menu.png'),'--full');
   await writeFile(resolve(output,'01-main-menu.snapshot.txt'),await browser('snapshot','-i'));
+  await browser('eval',"[...document.querySelectorAll('#expansionButtons button')].find(b=>/Swarm XL/.test(b.textContent)).click()");
+  await browser('wait','#levelGrid .level-card');
+  if(!(await browser('get','count','#levelGrid .level-card')).includes('4'))throw new Error('Swarm XL did not present its four Easy missions.');
+  await browser('screenshot',resolve(output,'01a-xl-level-select.png'),'--full');
+  await browser('click','#levelGrid .level-card');
+  await browser('wait','#playMission');
+  if(!(await browser('get','text','#levelName')).includes('Swarm XL'))throw new Error('Swarm XL pre-game briefing lost its campaign identity.');
+  await browser('click','#playMission');
+  await browser('wait','350');
+  await browser('screenshot',resolve(output,'01b-xl-gameplay.png'),'--full');
+  await browser('eval',"document.querySelector('#backToLevels').click()");
+  await browser('wait','#levelGrid .level-card');
+  await browser('click','#backToMenu');
   await browser('eval',"[...document.querySelectorAll('#expansionButtons button')].find(b=>/Procedural Swarm/.test(b.textContent)).click()");
   await browser('wait','#proceduralTools');
   if(!(await browser('get','count','#levelGrid .level-card')).includes('4'))throw new Error('Procedural Swarm did not present four generated missions.');
-  await browser('screenshot',resolve(output,'01a-procedural-swarm.png'),'--full');
+  await browser('click','#proceduralXlSize');
+  if(!(await browser('get','text','#levelGrid')).includes('XL'))throw new Error('Procedural XL did not render XL mission cards.');
+  await browser('screenshot',resolve(output,'01c-procedural-xl.png'),'--full');
+  await browser('click','#proceduralStandardSize');
+  await browser('screenshot',resolve(output,'01d-procedural-swarm.png'),'--full');
   await browser('click','#proceduralRandom');
   await browser('click','#rerollProcedural');
   await browser('eval',"document.querySelector('#proceduralSeed').value='A1B2C3D4';document.querySelector('#loadProceduralSeed').click()");
@@ -84,7 +101,7 @@ try{
   // Switch to the Medium difficulty tab (2nd tab) to reach the game-over mission.
   await browser('eval',"[...document.querySelectorAll('#difficultyTabs button')].find(b=>/Medium/.test(b.textContent)).click()");
   await browser('wait','#levelGrid .level-card');
-  await browser('click','#levelGrid .level-card:nth-child(8)');
+  await browser('eval',"[...document.querySelectorAll('#levelGrid .level-card')].find(b=>/A Bit of a Juggle/.test(b.textContent)).click()");
   await browser('wait','#playMission');
   const gameOverMission=await browser('get','text','#levelName');if(!gameOverMission.includes('A Bit of a Juggle'))throw new Error(`Failed to select the one-life game-over smoke mission; selected ${gameOverMission}.`);
   await browser('click','#playMission');

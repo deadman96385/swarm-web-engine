@@ -37,6 +37,11 @@ test('parseLevel detects fixed-path (classic) levels', () => {
   assert.ok(l.exitPoint);
 });
 
+test('parseLevel reads variable XL grids while preserving the standard default',()=>{
+  const body='<info name="XL" id="1" initCash="60"/><creeps><creep type="CHOMPER"/></creeps><creepWaves><wave spawnHex="s1"><spawn type="CHOMPER"/></wave></creepWaves><towers><tower type="BLASTER" cost="6"/></towers>',xl=parseLevel(`<gameLevel>${body}<hexmap cols="22" rows="24"><spawnhex name="s1" hex="0,5" exit="e1"/><exithex name="e1" hex="21,18"/></hexmap></gameLevel>`,'XL/GAME_LEVEL_XL_E_0001.xml','Easy','xl'),standard=parseLevel(`<gameLevel>${body}<hexmap><spawnhex name="s1" hex="0,5" exit="e1"/><exithex name="e1" hex="13,7"/></hexmap></gameLevel>`);
+  assert.deepEqual(xl.grid,{cols:22,rows:24});assert.equal(xl.xl,true);assert.ok(xl.blocked.has('21,10'));assert.ok(!xl.blocked.has('21,18'));assert.deepEqual(standard.grid,{cols:14,rows:15});assert.equal(standard.xl,false);
+});
+
 test('bundled levels parse into the expected campaigns', { skip: haveBundle ? false : 'src/bundled-levels.js not generated (run npm run extract-data)' }, async () => {
   const { entries } = await import('../src/bundled-levels.js');
   assert.ok(entries.length >= 30, `expected >=30 bundled entries, got ${entries.length}`);
