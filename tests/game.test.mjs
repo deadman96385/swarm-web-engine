@@ -235,6 +235,12 @@ test('procedural backdrop uses a denser mesh and wider smooth impact falloff',()
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const procedural=new Game(canvasStub(),testLevel(),{}),loaded=new Game(canvasStub(),testLevel(),{backdrop:{}});assert.equal(procedural.backdrop.step,8);assert.equal(procedural.backdrop.gridX,61);assert.equal(procedural.backdrop.gridY,101);assert.equal(loaded.backdrop.step,16);procedural.addBackdropBoom(240,400,10,32);loaded.addBackdropBoom(240,400,10,32);assert.ok(procedural.backdrop.pressures.filter(Boolean).length>loaded.backdrop.pressures.filter(Boolean).length);procedural.destroy();loaded.destroy();
 });
 
+test('graphics hot-swap preserves the live match while replacing its backdrop mode',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{}),cash=game.cash,lives=game.lives,towers=game.towers;
+  game.draw=noOp;const original={backdrop:{},towers:{}};game.setAssets(original);assert.equal(game.assets,original);assert.equal(game.backdrop.step,16);assert.equal(game.unifiedProceduralWave,false);assert.equal(game.cash,cash);assert.equal(game.lives,lives);assert.equal(game.towers,towers);
+  const procedural={};game.setAssets(procedural);assert.equal(game.assets,procedural);assert.equal(game.backdrop.step,8);assert.equal(game.unifiedProceduralWave,true);assert.equal(game.towers,towers);game.destroy();
+});
+
 test('procedural playfield is composed once and sent through the shared wave mesh',()=>{
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const procedural=new Game(canvasStub(),testLevel(),{}),loaded=new Game(canvasStub(),testLevel(),{backdrop:{}}),target=procedural.ctx,sceneContext={save:noOp,setTransform:noOp,clearRect:noOp,fillRect:noOp,drawImage:noOp,restore:noOp};let playfieldContext=null,meshCall=null;procedural.proceduralScene={width:480,height:800};procedural.proceduralSceneContext=sceneContext;procedural.backdrop.ensureProceduralTexture=()=>({});procedural.drawPlayfield=()=>playfieldContext=procedural.ctx;procedural.backdrop.draw=(...args)=>meshCall=args;procedural.drawUnifiedProceduralScene();assert.equal(procedural.unifiedProceduralWave,true);assert.equal(loaded.unifiedProceduralWave,false);assert.equal(playfieldContext,sceneContext);assert.deepEqual(meshCall,[target,procedural.proceduralScene,true]);assert.equal(procedural.ctx,target);procedural.destroy();loaded.destroy();
 });

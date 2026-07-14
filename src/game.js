@@ -36,6 +36,14 @@ export class Game {
   }
 
   destroy(){this.persist();cancelAnimationFrame(this.raf);this.backdrop.dispose();this.canvas.removeEventListener('pointerdown',this.onPointer);this.canvas.removeEventListener('pointermove',this.onPointerMove);this.canvas.removeEventListener('pointerup',this.onPointerUp);this.canvas.removeEventListener('pointercancel',this.onPointerUp);this.canvas.removeEventListener('wheel',this.onWheel);}
+  setAssets(assets){
+    const original=!!assets.backdrop,step=original?16:8;
+    this.assets=assets;
+    this.unifiedProceduralWave=!original;
+    if(this.backdrop.step!==step){this.backdrop.dispose();this.backdrop=new DynamicBackdrop(480,800,step);}
+    if(original){this.proceduralScene=null;this.proceduralSceneContext=null;}
+    this.draw();
+  }
   blocked(extra=null){const out=new Set(this.level.blocked);for(const spawn of this.level.spawns)out.add(cellKey(...spawn.cell));for(const key of this.towers.keys())out.add(key);if(extra)out.add(cellKey(...extra));return out;}
   allRoutes(blocked=this.blocked()){const spawns=new Set(this.level.spawns.map(s=>cellKey(...s.cell)));return this.level.spawns.every(s=>findPath(s.cell,s.exit,blocked,this.grid))&&this.creeps.filter(c=>!c.dead&&c.placed!==false).every(c=>{const at=pixelToHex(c.x,c.y,this.grid),key=at?cellKey(...at):'';return at&&(!blocked.has(key)||spawns.has(key))&&findPath(at,c.exit,blocked,this.grid);});}
   clearRoutes(){this.routeCache.clear();}

@@ -2,7 +2,7 @@
 
 A dependency-free browser reimplementation of **geoDefense Swarm** (Critical Thought Games, 2009/2012). The engine is an independent JavaScript rewrite informed by the archived Windows Phone build. It **plays standalone**: the site ships the mission/level data and localized UI text and renders **all graphics and audio procedurally** — canvas/WebGL vector art, Web Audio sound effects, and a formant-synthesized "female computer" countdown voice. It bundles **no** sprite sheets, artwork, WAV audio, or game binaries.
 
-Owners of the original Windows Phone `.xap` / iOS `.ipa` can *optionally* load them (from **Help &amp; Options → Load original archives**) to swap in the authentic sprites, artwork, and WAV audio. Those files are read entirely in your browser, never uploaded, and never written into the build; a **Use procedural art** toggle reverts at any time.
+Owners of the original Windows Phone `.xap` / iOS `.ipa` can *optionally* load them (from **Help &amp; Options → Load original archives**) to swap in the authentic sprites, artwork, and WAV audio. The engine extracts only the content it uses and caches that payload in IndexedDB, so it survives reloads without retaining the full packages. Nothing is uploaded or written into the build; the **Use procedural graphics** / **Use original graphics** toggle switches presentations without discarding the cache or restarting an active mission.
 
 ## Play online
 
@@ -10,7 +10,7 @@ Just open the hosted engine — it boots straight to the menu and is immediately
 
 **▶ https://deadman96385.github.io/swarm-web-engine/**
 
-If you own the originals, use **Help &amp; Options → Load original archives** to add your legally obtained `.xap` (and optionally the `.ipa`) for the authentic sprites, artwork, and WAV audio. The files are read locally in your browser and never leave the tab.
+If you own the originals, use **Help &amp; Options → Load original archives** to add your legally obtained `.xap` (and optionally the `.ipa`) for the authentic sprites, artwork, and WAV audio. The files are read locally; only the needed extracted assets are cached in that browser's site storage, and nothing is uploaded.
 
 ## Play locally
 
