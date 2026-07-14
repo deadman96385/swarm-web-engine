@@ -5,21 +5,31 @@ attribute float a_pressure;
 uniform vec2 u_resolution;
 varying vec2 v_texCoord;
 varying vec3 v_color;
+varying float v_pressure;
 void main(){
   vec2 clip=(a_position/u_resolution)*2.0-1.0;
   gl_Position=vec4(clip.x,-clip.y,0.0,1.0);
   v_texCoord=a_texCoord;
   v_color=vec3(0.0,a_pressure*0.75,a_pressure);
+  v_pressure=a_pressure;
 }`;
 
 const FRAGMENT_SHADER=`
 precision mediump float;
 uniform sampler2D u_texture;
+uniform float u_scene;
 varying vec2 v_texCoord;
 varying vec3 v_color;
+varying float v_pressure;
 void main(){
   vec4 sample=texture2D(u_texture,v_texCoord);
-  gl_FragColor=vec4(sample.rgb*v_color,sample.a);
+  if(u_scene>0.5){
+    float wave=max(0.0,v_pressure-0.25);
+    vec3 color=sample.rgb*(1.0+wave*0.75)+vec3(0.0,0.15,0.25)*wave*sample.a;
+    gl_FragColor=vec4(color,sample.a);
+  }else{
+    gl_FragColor=vec4(sample.rgb*v_color,sample.a);
+  }
 }`;
 
 function compile(gl,type,source){
@@ -49,14 +59,16 @@ class BackdropMeshRenderer {
     gl.clearColor(0,0,0,0);gl.disable(gl.BLEND);
   }
 
-  upload(image){
-    const gl=this.gl;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);this.uploadedImage=image;
+  upload(image,scene=false){
+    const gl=this.gl,wrap=scene?gl.CLAMP_TO_EDGE:gl.REPEAT;gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,wrap);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,wrap);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);this.uploadedImage=image;
   }
 
-  render(mesh,image){
-    if(this.uploadedImage!==image)this.upload(image);
-    const gl=this.gl,data=this.vertexData,procedural=image===mesh.proceduralTexture,uStep=procedural?mesh.step/image.width:.25,vStep=procedural?mesh.step/image.height:.25;for(let i=0;i<mesh.pointCount;i++){const at=i*5,p=i*2;data[at]=mesh.positions[p];data[at+1]=mesh.positions[p+1];data[at+2]=(i%mesh.gridX)*uStep;data[at+3]=Math.floor(i/mesh.gridX)*vStep;data[at+4]=mesh.brightness[i];}
-    gl.viewport(0,0,mesh.width,mesh.height);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.vertexBuffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.DYNAMIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.drawElements(gl.TRIANGLES,mesh.indices.length,gl.UNSIGNED_SHORT,0);gl.flush();return this.canvas;
+  render(mesh,image,scene=false){
+    // A composed scene changes in place every frame, so identity caching is not
+    // sufficient for that texture even though it remains the same canvas.
+    if(this.uploadedImage!==image||scene)this.upload(image,scene);
+    const gl=this.gl,data=this.vertexData,procedural=scene||image===mesh.proceduralTexture,uStep=procedural?mesh.step/image.width:.25,vStep=procedural?mesh.step/image.height:.25;for(let i=0;i<mesh.pointCount;i++){const at=i*5,p=i*2;data[at]=mesh.positions[p];data[at+1]=mesh.positions[p+1];data[at+2]=(i%mesh.gridX)*uStep;data[at+3]=Math.floor(i/mesh.gridX)*vStep;data[at+4]=mesh.brightness[i];}
+    gl.viewport(0,0,mesh.width,mesh.height);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(this.program);gl.uniform1f(gl.getUniformLocation(this.program,'u_scene'),scene?1:0);gl.bindBuffer(gl.ARRAY_BUFFER,this.vertexBuffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.DYNAMIC_DRAW);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.drawElements(gl.TRIANGLES,mesh.indices.length,gl.UNSIGNED_SHORT,0);gl.flush();return this.canvas;
   }
 }
 
@@ -98,11 +110,11 @@ export class DynamicBackdrop {
     g.putImageData(img,0,0);g.save();g.globalCompositeOperation='lighter';g.strokeStyle='rgb(110 225 255)';g.lineWidth=1.25;for(let q=0;8+q*36-24<width;q++)for(let r=0;r<24;r++){const x=8+q*36,y=26+r*44+(q%2===0?22:0);if(y-24>height)break;g.beginPath();for(let i=0;i<6;i++){const angle=Math.PI/3*i,px=x+Math.cos(angle)*24,py=y+Math.sin(angle)*24;i?g.lineTo(px,py):g.moveTo(px,py);}g.closePath();g.stroke();}g.restore();this.proceduralTexture=cv;return cv;
   }
 
-  draw(context,image){
+  draw(context,image,scene=false){
     const tex=image??this.ensureProceduralTexture();if(!tex)return;
     if(!this.renderer&&!this.rendererFailed)try{this.renderer=new BackdropMeshRenderer(this);}catch{this.rendererFailed=true;}
-    if(this.renderer){context.drawImage(this.renderer.render(this,tex),0,0);return;}
-    const pattern=context.createPattern(tex,'repeat');context.save();context.globalAlpha=.72;context.fillStyle=pattern;context.fillRect(0,0,this.width,this.height);context.restore();
+    if(this.renderer){context.drawImage(this.renderer.render(this,tex,scene),0,0);return;}
+    context.save();if(scene)context.drawImage(tex,0,0);else{const pattern=context.createPattern(tex,'repeat');context.globalAlpha=.72;context.fillStyle=pattern;context.fillRect(0,0,this.width,this.height);}context.restore();
   }
 
   dispose(){

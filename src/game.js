@@ -27,7 +27,7 @@ export class Game {
   constructor(canvas,level,assets,callbacks={},savedState=null,options={}){
     this.canvas=canvas;this.ctx=canvas.getContext('2d');this.level=level;this.assets=assets;this.callbacks=callbacks;this.pathMode=!!level.pathMode;this.grid=level.grid??DEFAULT_GRID;this.worldBounds=gridWorldBounds(this.grid);this.camera=level.xl&&!this.pathMode?new BoardCamera(this.grid,BOARD_VIEWPORT,savedState?.camera):null;
     this.hardcore=savedState?.hardcore??options.hardcore??false;this.healthBars=savedState?.healthBars??options.healthBars??true;this.placeAboveFinger=savedState?.placeAboveFinger??options.placeAboveFinger??false;this.cash=Math.floor(level.cash*(this.hardcore?1:1.25));this.lives=level.lives;this.score=0;this.multiplier=1;this.waveIndex=0;this.apparentWave=0;this.placedTypes=new Set(savedState?.placedTypes??[]);this.fullyUpgraded=new Set(savedState?.fullyUpgraded??[]);this.gotX50=!!savedState?.gotX50;
-    this.towers=new Map();this.creeps=[];this.projectiles=[];this.particles=[];this.effects=[];this.sequences=[];this.backdrop=new DynamicBackdrop(480,800,assets.backdrop?16:8);this.explosionHue=2/3;this.nextWaveTimer=level.delayBetweenWaves;this.awaitingEndlessReset=false;
+    this.towers=new Map();this.creeps=[];this.projectiles=[];this.particles=[];this.effects=[];this.sequences=[];this.unifiedProceduralWave=!assets.backdrop;this.backdrop=new DynamicBackdrop(480,800,assets.backdrop?16:8);this.explosionHue=2/3;this.nextWaveTimer=level.delayBetweenWaves;this.awaitingEndlessReset=false;
     this.selectedType=null;this.selectedTower=null;this.linkingTower=null;this.lastTowerTap=0;this.buildPreview=null;this.lastBuildPointer=null;this.hexBrightness=.25;this.hexBrightnessVelocity=0;this.hexBrightnessImpulse=0;this.nativeBuildDrag=null;this.nativePointerDown=false;this.nativeLinkTarget=null;this.nativeLinkPosition=null;this.oscillatorStarts={};this.routeCache=new Map();this.activePointers=new Map();this.cameraPan=null;this.cameraGesture=null;
     this.paused=false;this.ended=false;this.won=false;this.fireworkTimer=0;this.lastTime=0;this.saveAccumulator=0;this.visualTime=0;this.sceneTime=0;
     if(savedState){this.restore(savedState);if(this.towers.size)this.oscillatorStarts.LINK=0;if([...this.towers.values()].some(t=>t.type==='POP'))this.oscillatorStarts.POP=0;for(const type of ['WIGGLE','PULSAR'])if(this.creeps.some(c=>c.type===type))this.oscillatorStarts[type]=0;}else for(const p of level.placed)this.addTower(p.type,p.cell,true);
@@ -357,11 +357,28 @@ export class Game {
 
   draw(){
     const g=this.ctx;g.clearRect(0,0,480,800);g.fillStyle='#01030a';g.fillRect(0,0,480,800);
-    this.drawBackdrop();
-    if(this.camera){g.save();g.beginPath();g.rect(BOARD_VIEWPORT.x,BOARD_VIEWPORT.y,BOARD_VIEWPORT.width,BOARD_VIEWPORT.height);g.clip();const center=this.camera.worldToScreen({x:0,y:0});g.translate(center.x,center.y);g.scale(this.camera.zoom,this.camera.zoom);this.drawBoardScene();g.restore();this.drawMinimap();}
-    else this.drawBoardScene();
+    if(this.unifiedProceduralWave&&this.ensureProceduralScene())this.drawUnifiedProceduralScene();
+    else{this.drawBackdrop();this.drawPlayfield();}
+    if(this.camera)this.drawMinimap();
     this.drawNativeInterface();
     for(const e of this.effects)if(e.post)this.drawEffect(e);
+  }
+
+  ensureProceduralScene(){
+    if(this.proceduralSceneContext)return true;
+    const canvas=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(480,800):typeof document!=='undefined'?document.createElement('canvas'):null;if(!canvas)return false;canvas.width=480;canvas.height=800;const context=canvas.getContext('2d');if(!context)return false;this.proceduralScene=canvas;this.proceduralSceneContext=context;return true;
+  }
+
+  drawPlayfield(){
+    const g=this.ctx;if(this.camera){g.save();g.beginPath();g.rect(BOARD_VIEWPORT.x,BOARD_VIEWPORT.y,BOARD_VIEWPORT.width,BOARD_VIEWPORT.height);g.clip();const center=this.camera.worldToScreen({x:0,y:0});g.translate(center.x,center.y);g.scale(this.camera.zoom,this.camera.zoom);this.drawBoardScene();g.restore();}else this.drawBoardScene();
+  }
+
+  drawUnifiedProceduralScene(){
+    const target=this.ctx,g=this.proceduralSceneContext,texture=this.backdrop.ensureProceduralTexture();g.save();g.setTransform(1,0,0,1,0,0);g.globalAlpha=1;g.globalCompositeOperation='source-over';g.clearRect(0,0,480,800);g.fillStyle='#01030a';g.fillRect(0,0,480,800);if(texture){g.globalAlpha=.25;g.drawImage(texture,0,0);g.globalAlpha=1;}g.restore();
+    this.ctx=g;try{this.drawPlayfield();}finally{this.ctx=target;}
+    // The complete procedural playfield is one texture on the spring mesh.
+    // Every visible feature therefore follows the same explosion displacement.
+    this.backdrop.draw(target,this.proceduralScene,true);
   }
 
   drawBoardScene(){
