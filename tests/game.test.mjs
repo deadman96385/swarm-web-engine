@@ -207,6 +207,14 @@ test('native lower bar supports drag-to-build, wave advance, pause, and upgrade 
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{}),pointer=(x,y)=>({clientX:x,clientY:y,pointerId:1});game.onPointer(pointer(240,741));assert.equal(game.nativeBuildDrag.type,'BLASTER');const target=hexCenter(5,0);game.onPointerMove(pointer(target.x,target.y));game.onPointerUp(pointer(target.x,target.y));assert.ok(game.towers.has('5,0'));game.nextWaveTimer=14;game.onPointer(pointer(28,689));assert.equal(game.waveIndex,0);game.update(0);assert.equal(game.waveIndex,1);game.onPointer(pointer(452,689));assert.equal(game.paused,true);game.paused=false;game.selectedTower=game.towers.get('5,0');game.onPointer(pointer(352,746));assert.equal(game.selectedTower.upgradeRemaining,1);game.destroy();
 });
 
+test('procedural build bar draws its pause affordance without changing the original asset bar',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{});let pauseDraws=0;game.ctx={fillText:noOp,drawImage:noOp};game.drawProceduralBottomBar=noOp;game.drawTowerSprite=noOp;game.canLaunchWave=()=>false;game.drawProceduralPauseGlyph=()=>pauseDraws++;game.drawNativeBuildBar();assert.equal(pauseDraws,1);game.assets.buildBar={};pauseDraws=0;game.drawNativeBuildBar();assert.equal(pauseDraws,0);game.destroy();
+});
+
+test('procedural standard boards draw a logical grid separately from the backdrop texture',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{});let gridDraws=0;game.ctx={drawImage:noOp};game.drawHoneycombGrid=()=>gridDraws++;game.hexFill=noOp;game.drawParticles=noOp;game.drawEffect=noOp;game.drawCreep=noOp;game.drawTower=noOp;game.drawProjectile=noOp;game.drawSelectionOverlay=noOp;game.drawBoardScene();assert.equal(gridDraws,1);game.assets.honeycomb={};gridDraws=0;game.drawBoardScene();assert.equal(gridDraws,0);game.destroy();
+});
+
 test('native sell, impact, death, and breach effects retain their authored scale',()=>{
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{});game.addTower('BLASTER',[5,0]);assert.equal(game.effects.length,0);
   game.effects=[];game.selectedTower=game.towers.get('5,0');game.sell();assert.ok(game.effects.some(e=>e.kind==='light'&&e.color==='#ff0000'&&e.style==='star'&&e.fadeOut===.1));
@@ -231,18 +239,18 @@ test('dynamic backdrop uses the native 16-pixel spring mesh and pressure decay',
   const before=mesh.positions[neighbor*2];mesh.boomAt(240,400,-384,384);assert.equal(mesh.positions[neighbor*2],before);mesh.dispose();
 });
 
-test('procedural backdrop uses a denser mesh and wider smooth impact falloff',()=>{
-  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const procedural=new Game(canvasStub(),testLevel(),{}),loaded=new Game(canvasStub(),testLevel(),{backdrop:{}});assert.equal(procedural.backdrop.step,8);assert.equal(procedural.backdrop.gridX,61);assert.equal(procedural.backdrop.gridY,101);assert.equal(loaded.backdrop.step,16);procedural.addBackdropBoom(240,400,10,32);loaded.addBackdropBoom(240,400,10,32);assert.ok(procedural.backdrop.pressures.filter(Boolean).length>loaded.backdrop.pressures.filter(Boolean).length);procedural.destroy();loaded.destroy();
+test('procedural backdrop keeps its denser mesh while matching the original impact range',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const procedural=new Game(canvasStub(),testLevel(),{}),loaded=new Game(canvasStub(),testLevel(),{backdrop:{}});assert.equal(procedural.backdrop.step,8);assert.equal(procedural.backdrop.gridX,61);assert.equal(procedural.backdrop.gridY,101);assert.equal(loaded.backdrop.step,16);procedural.addBackdropBoom(240,400,10,32);loaded.addBackdropBoom(240,400,10,32);const proceduralOutside=50*procedural.backdrop.gridX+35,proceduralInside=50*procedural.backdrop.gridX+33,loadedOutside=25*loaded.backdrop.gridX+17,loadedInside=25*loaded.backdrop.gridX+16;assert.equal(procedural.backdrop.pressures[proceduralOutside],0);assert.ok(procedural.backdrop.pressures[proceduralInside]>0);assert.equal(loaded.backdrop.pressures[loadedOutside],0);assert.ok(loaded.backdrop.pressures[loadedInside]>0);procedural.destroy();loaded.destroy();
 });
 
 test('graphics hot-swap preserves the live match while replacing its backdrop mode',()=>{
   globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{}),cash=game.cash,lives=game.lives,towers=game.towers;
-  game.draw=noOp;const original={backdrop:{},towers:{}};game.setAssets(original);assert.equal(game.assets,original);assert.equal(game.backdrop.step,16);assert.equal(game.unifiedProceduralWave,false);assert.equal(game.cash,cash);assert.equal(game.lives,lives);assert.equal(game.towers,towers);
-  const procedural={};game.setAssets(procedural);assert.equal(game.assets,procedural);assert.equal(game.backdrop.step,8);assert.equal(game.unifiedProceduralWave,true);assert.equal(game.towers,towers);game.destroy();
+  game.draw=noOp;const original={backdrop:{},towers:{}};game.setAssets(original);assert.equal(game.assets,original);assert.equal(game.backdrop.step,16);assert.equal(game.cash,cash);assert.equal(game.lives,lives);assert.equal(game.towers,towers);
+  const procedural={};game.setAssets(procedural);assert.equal(game.assets,procedural);assert.equal(game.backdrop.step,8);assert.equal(game.towers,towers);game.destroy();
 });
 
-test('procedural playfield is composed once and sent through the shared wave mesh',()=>{
-  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const procedural=new Game(canvasStub(),testLevel(),{}),loaded=new Game(canvasStub(),testLevel(),{backdrop:{}}),target=procedural.ctx,sceneContext={save:noOp,setTransform:noOp,clearRect:noOp,fillRect:noOp,drawImage:noOp,restore:noOp};let playfieldContext=null,meshCall=null;procedural.proceduralScene={width:480,height:800};procedural.proceduralSceneContext=sceneContext;procedural.backdrop.ensureProceduralTexture=()=>({});procedural.drawPlayfield=()=>playfieldContext=procedural.ctx;procedural.backdrop.draw=(...args)=>meshCall=args;procedural.drawUnifiedProceduralScene();assert.equal(procedural.unifiedProceduralWave,true);assert.equal(loaded.unifiedProceduralWave,false);assert.equal(playfieldContext,sceneContext);assert.deepEqual(meshCall,[target,procedural.proceduralScene,true]);assert.equal(procedural.ctx,target);procedural.destroy();loaded.destroy();
+test('procedural draw warps only the backdrop before painting a stable playfield',()=>{
+  globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=noOp;const game=new Game(canvasStub(),testLevel(),{}),target={clearRect:noOp,fillRect:noOp},order=[];game.ctx=target;let meshCall=null;game.backdrop.draw=(...args)=>{order.push('backdrop');meshCall=args;};game.drawPlayfield=()=>order.push('playfield');game.drawNativeInterface=()=>order.push('interface');game.draw();assert.deepEqual(order,['backdrop','playfield','interface']);assert.deepEqual(meshCall,[target,undefined]);game.destroy();
 });
 
 test('massless shot sparkles remain visual while explosion debris feeds Vortex towers',()=>{

@@ -93,9 +93,11 @@ export class DynamicBackdrop {
     for(let row=minY;row<maxY;row++)for(let column=minX;column<maxX;column++){const i=row*this.gridX+column,p=i*2,dx=this.positions[p]-x,dy=this.positions[p+1]-y,distance=Math.hypot(dx,dy);if(distance>=range)continue;let falloff=1-distance/range;if(smooth)falloff=falloff*falloff*(3-2*falloff);const impulse=force*falloff;if(impulse<=0)continue;const nx=distance?dx/distance:0,ny=distance?dy/distance:0;this.positions[p]+=nx*impulse;this.positions[p+1]+=ny*impulse;this.pressures[i]+=impulse;}
   }
 
-  // A screen-scale, power-of-two replacement for BackdropP1. Its honeycomb
-  // uses the same geometry as the procedural playfield, and because it lives
-  // inside the mesh texture its cells bend and brighten under pressure.
+  // A screen-scale, power-of-two replacement for BackdropP1. The fine
+  // honeycomb deliberately sits at half the logical playfield scale so the
+  // procedural renderer retains two readable layers: atmosphere here and
+  // interactive board cells in Game.drawHoneycombGrid(). Because this texture
+  // lives inside the mesh, its cells still bend and brighten under pressure.
   ensureProceduralTexture(){
     if(this.proceduralTexture!==undefined)return this.proceduralTexture;
     const width=512,height=1024,cv=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(width,height):document.createElement('canvas');cv.width=width;cv.height=height;
@@ -107,7 +109,7 @@ export class DynamicBackdrop {
       const t=Math.max(0,Math.min(1,(n/1.98)*0.5+0.5)),o=(y*width+x)*4;
       d[o]=Math.round(2+7*t);d[o+1]=Math.round(9+17*t);d[o+2]=Math.round(20+28*t);d[o+3]=255;
     }
-    g.putImageData(img,0,0);g.save();g.globalCompositeOperation='lighter';g.strokeStyle='rgb(110 225 255)';g.lineWidth=1.25;for(let q=0;8+q*36-24<width;q++)for(let r=0;r<24;r++){const x=8+q*36,y=26+r*44+(q%2===0?22:0);if(y-24>height)break;g.beginPath();for(let i=0;i<6;i++){const angle=Math.PI/3*i,px=x+Math.cos(angle)*24,py=y+Math.sin(angle)*24;i?g.lineTo(px,py):g.moveTo(px,py);}g.closePath();g.stroke();}g.restore();this.proceduralTexture=cv;return cv;
+    g.putImageData(img,0,0);g.save();g.globalCompositeOperation='lighter';g.strokeStyle='rgba(92,205,240,.55)';g.lineWidth=.85;const radius=11,heightStep=Math.sqrt(3)*radius,columnStep=radius*1.5;for(let q=-1;q*columnStep-radius<width;q++)for(let r=-1;;r++){const x=6+q*columnStep,y=heightStep/2+r*heightStep+(q%2?heightStep/2:0);if(y-radius>height)break;if(y+radius<0)continue;g.beginPath();for(let i=0;i<6;i++){const angle=Math.PI/3*i,px=x+Math.cos(angle)*radius,py=y+Math.sin(angle)*radius;i?g.lineTo(px,py):g.moveTo(px,py);}g.closePath();g.stroke();}g.restore();this.proceduralTexture=cv;return cv;
   }
 
   draw(context,image,scene=false){
